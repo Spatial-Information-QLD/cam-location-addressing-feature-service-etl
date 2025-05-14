@@ -7,6 +7,7 @@ import httpx
 from jinja2 import Template
 
 from address_etl.create_tables import create_tables
+from address_etl.get_address_concatenation import get_address_concatenation
 from address_etl.get_address_iris import get_address_iris
 
 
@@ -329,15 +330,6 @@ def write_address_rows(data: list[dict], cursor: sqlite3.Cursor):
     """
     cursor.executemany(query, data)
     cursor.connection.commit()
-
-
-def get_address_concatenation(row: dict) -> str:
-    def get_value(key: str) -> str:
-        return row.get(key, {}).get("value", "")
-
-    street_no_2 = get_value("street_no_2")
-    unit_number = get_value("unit_number")
-    return f"{get_value('unit_type')}{unit_number}{get_value('unit_suffix')}{'/' if unit_number else ''}{get_value('street_no_1')}{get_value('street_no_1_suffix')}{'-' if street_no_2 else ''}{street_no_2}{get_value('street_no_2_suffix')} {get_value('street_name')} {get_value('street_type')} {get_value('street_suffix')} {get_value('locality')} {get_value('state')}"
 
 
 def populate_address_current_staging_table(
