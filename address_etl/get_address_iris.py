@@ -5,6 +5,9 @@ from jinja2 import Template
 
 
 def get_address_iris_query(limit: int | None = None):
+    """
+    Get the query to get the address IRIs.
+    """
     return (
         Template(
             dedent(
@@ -28,6 +31,11 @@ def get_address_iris_query(limit: int | None = None):
 def get_address_iris(
     sparql_endpoint: str, client: httpx.Client, limit: int | None = None
 ):
+    """
+    Get the address IRIs from the SPARQL endpoint.
+
+    The limit parameter is optional and only used for testing.
+    """
     query = get_address_iris_query(limit)
     response = client.post(
         sparql_endpoint,
