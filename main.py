@@ -6,7 +6,8 @@ import time
 import httpx
 from jinja2 import Template
 
-from address_etl import create_tables
+from address_etl.create_tables import create_tables
+from address_etl.get_address_iris import get_address_iris
 
 
 def get_rows(address_iris: list[str], sparql_endpoint: str, client: httpx.Client):
@@ -289,29 +290,6 @@ def get_rows(address_iris: list[str], sparql_endpoint: str, client: httpx.Client
     if response.status_code != 200:
         raise Exception(f"Address rows query failed: {response.text}")
     return response.json()["results"]["bindings"]
-
-
-# TODO: remove limit
-def get_address_iris(sparql_endpoint: str, client: httpx.Client):
-    query = """
-        PREFIX addr: <https://linked.data.gov.au/def/addr/>
-        SELECT ?iri
-        WHERE {
-            ?iri a addr:Address
-        }
-        LIMIT 10
-    """
-    response = client.post(
-        sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Failed to get address IRIs: {response.text}")
-    return [row["iri"]["value"] for row in response.json()["results"]["bindings"]]
 
 
 def write_address_rows(data: list[dict], cursor: sqlite3.Cursor):
