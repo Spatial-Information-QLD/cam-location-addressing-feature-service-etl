@@ -5,6 +5,8 @@ version: "3"
 vars:
   SPARQL_ENDPOINT: "http://localhost:7200/repositories/addressing"
   SQLITE_CONN_STR: "address.db"
+  PYTHON_SRC: "address_etl"
+  TESTS_DIR: "tests"
 
 tasks:
   default:
@@ -13,3 +15,21 @@ tasks:
 
   dev:
     cmd: SPARQL_ENDPOINT={{ .SPARQL_ENDPOINT }} SQLITE_CONN_STR={{ .SQLITE_CONN_STR }} uv run main.py
+
+  format:
+    desc: Format Python code.
+    cmds:
+      - uv run ruff format $PYTHON_SRC
+      - uv run ruff check --select I --fix $PYTHON_SRC
+      - uv run ruff format $TESTS_DIR
+      - uv run ruff check --select I --fix $TESTS_DIR
+
+  code:
+    desc: Alias of format.
+    cmds:
+      - task: format
+
+  test:
+    desc: Run the tests.
+    cmds:
+      - uv run pytest
