@@ -16,7 +16,7 @@ def get_address_iris_query(limit: int | None = None):
                 SELECT ?iri
                 WHERE {
                     ?iri a addr:Address
-                }\
+                }
                 {% if limit %}
                 LIMIT {{ limit }}
                 {% endif %}

@@ -12,9 +12,10 @@ def test_get_address_iris_query_limit_10():
         WHERE {
             ?iri a addr:Address
         }
+
         LIMIT 10
         """
-    )
+    ).strip()
     assert query == query_limit_10
 
 
@@ -28,5 +29,5 @@ def test_get_address_iris_query_no_limit():
             ?iri a addr:Address
         }
     """
-    )
+    ).strip()
     assert query == query_no_limit
