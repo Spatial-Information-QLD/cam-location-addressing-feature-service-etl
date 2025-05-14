@@ -1,0 +1,15 @@
+# https://taskfile.dev
+
+version: "3"
+
+vars:
+  SPARQL_ENDPOINT: "http://localhost:7200/repositories/addressing"
+  SQLITE_CONN_STR: "address.db"
+
+tasks:
+  default:
+    cmd: task -a
+    silent: true
+
+  dev:
+    cmd: SPARQL_ENDPOINT={{ .SPARQL_ENDPOINT }} SQLITE_CONN_STR={{ .SQLITE_CONN_STR }} uv run main.py
