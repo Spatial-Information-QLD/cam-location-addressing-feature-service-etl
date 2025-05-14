@@ -1,70 +1,12 @@
-# TODO: with sqlite, set from environment variable whether to use in-memory or file-based.
-#       in ECS, likely we need to provide it a location where it's allowed to write files.
-
+import logging
 import os
 import sqlite3
-import logging
 import time
 
 import httpx
 from jinja2 import Template
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
-
-def create_tables(cursor: sqlite3.Cursor):
-    logger.info("Creating geocode table")
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS geocode (
-            address_pid TEXT,
-            geocode_type TEXT,
-            lon TEXT,
-            lat TEXT
-        )
-    """
-    )
-
-    logger.info("Creating address table")
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS address (
-            lot TEXT,
-            plan TEXT,
-            unit_type TEXT,
-            unit_number TEXT,
-            unit_suffix TEXT,
-            floor_type TEXT,
-            floor_number TEXT,
-            floor_suffix TEXT,
-            property_name TEXT,
-            street_no_1 TEXT,
-            street_no_1_suffix TEXT,
-            street_no_2 TEXT,
-            street_no_2_suffix TEXT,
-            street_number TEXT,
-            street_name TEXT,
-            street_type TEXT,
-            street_suffix TEXT,
-            street_full TEXT,
-            locality TEXT,
-            local_authority TEXT,
-            state TEXT,
-            address TEXT,
-            address_status TEXT,
-            address_standard TEXT,
-            lotplan_status TEXT,
-            address_pid INTEGER,
-            geocode_type TEXT,
-            latitude REAL,
-            longitude REAL
-        )
-    """
-    )
+from address_etl import create_tables
 
 
 def get_rows(address_iris: list[str], sparql_endpoint: str, client: httpx.Client):
@@ -349,6 +291,7 @@ def get_rows(address_iris: list[str], sparql_endpoint: str, client: httpx.Client
     return response.json()["results"]["bindings"]
 
 
+# TODO: remove limit
 def get_address_iris(sparql_endpoint: str, client: httpx.Client):
     query = """
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
@@ -356,6 +299,7 @@ def get_address_iris(sparql_endpoint: str, client: httpx.Client):
         WHERE {
             ?iri a addr:Address
         }
+        LIMIT 10
     """
     response = client.post(
         sparql_endpoint,
@@ -372,7 +316,8 @@ def get_address_iris(sparql_endpoint: str, client: httpx.Client):
 
 def write_address_rows(data: list[dict], cursor: sqlite3.Cursor):
     query = """
-        INSERT INTO address VALUES(
+        INSERT INTO address_current_staging VALUES(
+            :id,
             :lot,
             :plan,
             :unit_type,
@@ -417,16 +362,9 @@ def get_address_concatenation(row: dict) -> str:
     return f"{get_value('unit_type')}{unit_number}{get_value('unit_suffix')}{'/' if unit_number else ''}{get_value('street_no_1')}{get_value('street_no_1_suffix')}{'-' if street_no_2 else ''}{street_no_2}{get_value('street_no_2_suffix')} {get_value('street_name')} {get_value('street_type')} {get_value('street_suffix')} {get_value('locality')} {get_value('state')}"
 
 
-def main():
-    start_time = time.time()
-    logger.info("Starting ETL process")
-    sparql_endpoint = os.environ["SPARQL_ENDPOINT"]
-    sqlite_conn_str = os.environ["SQLITE_CONN_STR"]
-
-    connection = sqlite3.connect(sqlite_conn_str)
-    cursor = connection.cursor()
-    create_tables(cursor)
-
+def populate_address_current_staging_table(
+    sparql_endpoint: str, cursor: sqlite3.Cursor, logger: logging.Logger
+):
     with httpx.Client() as client:
         address_iris = get_address_iris(sparql_endpoint, client)
         logger.info(f"Retrieved {len(address_iris)} address IRIs to process")
@@ -442,6 +380,7 @@ def main():
             modified_rows = []
             for row in rows:
                 data = {}
+                data["id"] = None
                 data["lot"] = row.get("lot", {}).get("value")
                 data["plan"] = row.get("plan", {}).get("value")
                 data["unit_type"] = row.get("unit_type", {}).get("value")
@@ -478,6 +417,95 @@ def main():
                 modified_rows.append(data)
 
             write_address_rows(modified_rows, cursor)
+
+
+def populate_geocode_table(cursor: sqlite3.Cursor):
+    cursor.executemany(
+        """
+        INSERT INTO geocode VALUES(
+            :address_pid,
+            :geocode_type,
+            :longitude,
+            :latitude
+        )
+    """,
+        [
+            {
+                "address_pid": "196483",
+                "geocode_type": "PC",
+                "longitude": "153.11051065",
+                "latitude": "-27.24430653",
+            }
+        ],
+    )
+    cursor.connection.commit()
+
+
+def populate_address_current_table(cursor: sqlite3.Cursor):
+    cursor.execute(
+        """
+        INSERT INTO address_current
+        SELECT
+            a.id,
+            a.lot,
+            a.plan,
+            a.unit_type,
+            a.unit_number,
+            a.unit_suffix,
+            a.floor_type,
+            a.floor_number,
+            a.floor_suffix,
+            a.property_name,
+            a.street_no_1,
+            a.street_no_1_suffix,
+            a.street_no_2,
+            a.street_no_2_suffix,
+            a.street_number,
+            a.street_name,
+            a.street_type,
+            a.street_suffix,
+            a.street_full,
+            a.locality,
+            a.local_authority,
+            a.state,
+            a.address,
+            a.address_status,
+            a.address_standard,
+            a.lotplan_status,
+            a.address_pid,
+            g.geocode_type,
+            g.latitude,
+            g.longitude
+        FROM address_current_staging a
+        JOIN geocode g ON a.address_pid = g.address_pid
+    """
+    )
+    cursor.connection.commit()
+
+
+def main():
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    start_time = time.time()
+    logger.info("Starting ETL process")
+    sparql_endpoint = os.environ["SPARQL_ENDPOINT"]
+    sqlite_conn_str = os.environ["SQLITE_CONN_STR"]
+
+    connection = sqlite3.connect(sqlite_conn_str)
+    try:
+        cursor = connection.cursor()
+        create_tables(cursor, logger)
+        populate_address_current_staging_table(sparql_endpoint, cursor, logger)
+        populate_geocode_table(cursor)
+        populate_address_current_table(cursor)
+    finally:
+        logger.info("Closing connection to SQLite database")
+        connection.close()
 
     logger.info("ETL process completed successfully")
     logger.info(f"Total time taken: {time.time() - start_time:.2f} seconds")
