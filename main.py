@@ -3,6 +3,7 @@ import sqlite3
 import time
 
 import httpx
+from rich.progress import track
 
 from address_etl.create_tables import create_tables
 from address_etl.get_address_concatenation import get_address_concatenation
@@ -33,7 +34,9 @@ def populate_address_current_staging_table(
         ]
         logger.info(f"Split into {len(address_iri_chunks)} chunks for processing")
 
-        for address_iri_chunk in address_iri_chunks:
+        for address_iri_chunk in track(
+            address_iri_chunks, description="Processing address IRIs"
+        ):
             rows = get_rows(address_iri_chunk, sparql_endpoint, client)
             modified_rows = []
             for row in rows:

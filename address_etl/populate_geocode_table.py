@@ -5,6 +5,7 @@ from typing import Any
 
 import backoff
 import httpx
+from rich.progress import track
 
 from address_etl.esri_rest_api import get_esri_token
 from address_etl.settings import settings
@@ -95,7 +96,10 @@ def populate_geocode_table(cursor: sqlite3.Cursor):
 
         # Process in batches
         batch_size = 10_000
-        for offset in range(0, total_count, batch_size):
+        for offset in track(
+            range(0, total_count, batch_size),
+            description="Processing geocodes",
+        ):
             logger.info(
                 f"Processing records {offset} to {min(offset + batch_size, total_count)}"
             )
