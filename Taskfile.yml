@@ -12,7 +12,7 @@ tasks:
     silent: true
 
   dev:
-    cmd: SPARQL_ENDPOINT={{ .SPARQL_ENDPOINT }} SQLITE_CONN_STR={{ .SQLITE_CONN_STR }} uv run main.py
+    cmd: uv run main.py
 
   format:
     desc: Format Python code.
