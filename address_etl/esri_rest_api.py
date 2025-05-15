@@ -7,7 +7,7 @@ def get_esri_token(
     esri_username: str,
     esri_password: str,
     client: httpx.Client,
-    expiration_in_minutes: int = 10,
+    expiration_in_minutes: int = 15,
 ) -> str:
     """Get an ESRI token for the given username and password"""
     params = {"f": "json", "referer": referer, "expiration": expiration_in_minutes}
