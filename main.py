@@ -1,22 +1,41 @@
 import logging
-import os
 import sqlite3
 import time
 
 import httpx
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from address_etl.create_tables import create_tables
 from address_etl.get_address_concatenation import get_address_concatenation
 from address_etl.get_address_iris import get_address_iris
 from address_etl.get_rows import get_rows
+from address_etl.populate_geocode_table import populate_geocode_table
 from address_etl.write_address_current_staging_rows import (
     write_address_current_staging_rows,
 )
 
 
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    sparql_endpoint: str
+    sqlite_conn_str: str
+    esri_url: str
+    esri_auth_url: str
+    esri_referer: str
+    esri_username: str
+    esri_password: str
+
+    populate_geocode_table: bool = False
+    http_retry_max_time: int = 60
+
+
 def populate_address_current_staging_table(
     sparql_endpoint: str, cursor: sqlite3.Cursor, logger: logging.Logger
 ):
+    """
+    Retrieve all address IRIs from the SPARQL endpoint, page through and retrieve the address data in chunks of 1000, and insert them into the address_current_staging table.
+    """
     with httpx.Client() as client:
         address_iris = get_address_iris(sparql_endpoint, client)
         logger.info(f"Retrieved {len(address_iris)} address IRIs to process")
@@ -71,29 +90,14 @@ def populate_address_current_staging_table(
             write_address_current_staging_rows(modified_rows, cursor)
 
 
-def populate_geocode_table(cursor: sqlite3.Cursor):
-    cursor.executemany(
-        """
-        INSERT INTO geocode VALUES(
-            :address_pid,
-            :geocode_type,
-            :longitude,
-            :latitude
-        )
-    """,
-        [
-            {
-                "address_pid": "196483",
-                "geocode_type": "PC",
-                "longitude": "153.11051065",
-                "latitude": "-27.24430653",
-            }
-        ],
-    )
-    cursor.connection.commit()
-
-
 def populate_address_current_table(cursor: sqlite3.Cursor):
+    """
+    Populate the address_current table with data from the address_current_staging table joined
+    with the geocode table on the address_pid column.
+
+    Note that since we're performing a join, if the address_pid does not exist in the geocode table,
+    the row will not be inserted into the address_current table.
+    """
     cursor.execute(
         """
         INSERT INTO address_current
@@ -145,15 +149,16 @@ def main():
 
     start_time = time.time()
     logger.info("Starting ETL process")
-    sparql_endpoint = os.environ["SPARQL_ENDPOINT"]
-    sqlite_conn_str = os.environ["SQLITE_CONN_STR"]
 
-    connection = sqlite3.connect(sqlite_conn_str)
+    settings = Settings()
+
+    connection = sqlite3.connect(settings.sqlite_conn_str)
     try:
         cursor = connection.cursor()
         create_tables(cursor, logger)
-        populate_address_current_staging_table(sparql_endpoint, cursor, logger)
-        populate_geocode_table(cursor)
+        populate_address_current_staging_table(settings.sparql_endpoint, cursor, logger)
+        if settings.populate_geocode_table:
+            populate_geocode_table(cursor)
         populate_address_current_table(cursor)
     finally:
         logger.info("Closing connection to SQLite database")
