@@ -69,9 +69,10 @@ def populate_address_current_staging_table(
                 data["address_standard"] = row.get("address_standard", {}).get("value")
                 data["lotplan_status"] = row.get("lotplan_status", {}).get("value")
                 data["address_pid"] = row.get("address_pid", {}).get("value")
-                data["geocode_type"] = None  # TODO: geocodes
-                data["latitude"] = None  # TODO: geocodes
-                data["longitude"] = None  # TODO: geocodes
+                # Geocodes are populated later.
+                data["geocode_type"] = None
+                data["latitude"] = None
+                data["longitude"] = None
                 modified_rows.append(data)
 
             write_address_current_staging_rows(modified_rows, cursor)
