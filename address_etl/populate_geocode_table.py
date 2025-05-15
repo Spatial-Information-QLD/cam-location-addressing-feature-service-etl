@@ -35,32 +35,6 @@ def on_backoff_handler(details):
     )
 
 
-# In some cases, the service returns a 200 response but no features are returned.
-@backoff.on_exception(
-    backoff.expo,
-    (httpx.HTTPError, KeyError),
-    max_time=settings.http_retry_max_time_in_minutes,
-    on_backoff=on_backoff_handler,
-)
-def fetch_geocodes(
-    client: httpx.Client, access_token: str, offset: int, batch_size: int = 10000
-) -> list[dict[str, Any]]:
-    """Fetch a batch of geocodes from the service"""
-    params = {
-        "where": "1=1",
-        "outFields": "geocode_type,address_pid",
-        "returnGeometry": "true",
-        "resultOffset": offset,
-        "resultRecordCount": batch_size,
-        "f": "json",
-        "token": access_token,
-    }
-
-    response = client.get(settings.esri_geocode_rest_api_url, params=params)
-    response.raise_for_status()
-    return response.json()["features"]
-
-
 def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
     """Insert geocodes into the database"""
     for feature in features:
@@ -76,34 +50,90 @@ def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         )
 
 
-def populate_geocode_table(cursor: sqlite3.Cursor):
+class GeocodeTablePopulator:
     """
-    Scrape the geocodes from the Esri feature service and cache them in the database.
+    Populate the geocode table with data from the Esri feature service.
+
+    This class handles refreshing the access token if it expires.
     """
-    start_time = time.time()
-    with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
-        access_token = get_esri_token(
+
+    def __init__(self, cursor: sqlite3.Cursor, client: httpx.Client):
+        self.cursor = cursor
+        self.client = client
+        self.access_token = get_esri_token(
             settings.esri_auth_url,
             settings.esri_referer,
             settings.esri_username,
             settings.esri_password,
             client,
         )
-        total_count = get_total_count(
-            settings.esri_geocode_rest_api_url, client, access_token
-        )
-        logger.info(f"Total records to process: {total_count}")
 
-        # Process in batches
+        self.total_count = get_total_count(
+            settings.esri_geocode_rest_api_url, client, self.access_token
+        )
+
+    def populate(self):
+        logger.info(f"Total records to process: {self.total_count}")
         batch_size = 10_000
         for offset in track(
-            range(0, total_count, batch_size),
+            range(0, self.total_count, batch_size),
             description="Processing geocodes",
         ):
-            features = fetch_geocodes(client, access_token, offset, batch_size)
-            insert_geocodes(cursor, features)
-            cursor.connection.commit()
+            features = self.fetch_geocodes(offset, batch_size)
+            insert_geocodes(self.cursor, features)
+            self.cursor.connection.commit()
+
+    @backoff.on_exception(
+        backoff.expo,
+        (httpx.HTTPError, KeyError),
+        max_time=settings.http_retry_max_time_in_seconds,
+        on_backoff=on_backoff_handler,
+    )
+    def fetch_geocodes(
+        self, offset: int, batch_size: int = 10000
+    ) -> list[dict[str, Any]]:
+        """Fetch a batch of geocodes from the service"""
+        params = {
+            "where": "1=1",
+            "outFields": "geocode_type,address_pid",
+            "returnGeometry": "true",
+            "resultOffset": offset,
+            "resultRecordCount": batch_size,
+            "f": "json",
+            "token": self.access_token,
+        }
+
+        response = self.client.get(settings.esri_geocode_rest_api_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        try:
+            return data["features"]
+        except KeyError as error:
+            logger.warning(f"No features found in the response: {response.text}")
+
+            if "error" in data and data["error"].get("code") == 498:
+                logger.warning("Received 498 error, retrying with new access token")
+                self.access_token = get_esri_token(
+                    settings.esri_auth_url,
+                    settings.esri_referer,
+                    settings.esri_username,
+                    settings.esri_password,
+                    self.client,
+                )
+                return self.fetch_geocodes(offset, batch_size)
+
+            raise error
+
+
+def populate_geocode_table(cursor: sqlite3.Cursor):
+    """
+    Scrape the geocodes from the Esri feature service and cache them in the database.
+    """
+    start_time = time.time()
+    with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
+        geocode_populator = GeocodeTablePopulator(cursor, client)
+        geocode_populator.populate()
 
         logger.info(
-            f"Geocodes loaded successfully ({total_count} records) in {time.time() - start_time:.2f} seconds"
+            f"Geocodes loaded successfully ({geocode_populator.total_count} records) in {time.time() - start_time:.2f} seconds"
         )
