@@ -14,6 +14,8 @@ from address_etl.write_address_current_staging_rows import (
     write_address_current_staging_rows,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
@@ -31,7 +33,7 @@ class Settings(BaseSettings):
 
 
 def populate_address_current_staging_table(
-    sparql_endpoint: str, cursor: sqlite3.Cursor, logger: logging.Logger
+    sparql_endpoint: str, cursor: sqlite3.Cursor
 ):
     """
     Retrieve all address IRIs from the SPARQL endpoint, page through and retrieve the address data in chunks of 1000, and insert them into the address_current_staging table.
@@ -140,7 +142,6 @@ def populate_address_current_table(cursor: sqlite3.Cursor):
 
 
 def main():
-    logger = logging.getLogger(__name__)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -155,8 +156,8 @@ def main():
     connection = sqlite3.connect(settings.sqlite_conn_str)
     try:
         cursor = connection.cursor()
-        create_tables(cursor, logger)
-        populate_address_current_staging_table(settings.sparql_endpoint, cursor, logger)
+        create_tables(cursor)
+        populate_address_current_staging_table(settings.sparql_endpoint, cursor)
         if settings.populate_geocode_table:
             populate_geocode_table(cursor)
         populate_address_current_table(cursor)

@@ -1,8 +1,10 @@
 import logging
 import sqlite3
 
+logger = logging.getLogger(__name__)
 
-def create_tables(cursor: sqlite3.Cursor, logger: logging.Logger):
+
+def create_tables(cursor: sqlite3.Cursor):
     """
     Create the tables required for the address ETL process
 
