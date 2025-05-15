@@ -3,8 +3,6 @@
 version: "3"
 
 vars:
-  SPARQL_ENDPOINT: "http://localhost:7200/repositories/addressing"
-  SQLITE_CONN_STR: "address.db"
   PYTHON_SRC: "address_etl"
   TESTS_DIR: "tests"
 
