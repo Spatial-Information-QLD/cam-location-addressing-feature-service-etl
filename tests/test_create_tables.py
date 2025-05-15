@@ -1,15 +1,13 @@
-import logging
 import sqlite3
 
 from address_etl.create_tables import create_tables
 
 
 def test_create_tables():
-    logger = logging.getLogger(__name__)
     connection = sqlite3.connect(":memory:")
     try:
         cursor = connection.cursor()
-        create_tables(cursor, logger)
+        create_tables(cursor)
         assert cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall() == [
