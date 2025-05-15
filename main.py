@@ -3,37 +3,18 @@ import sqlite3
 import time
 
 import httpx
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from address_etl.create_tables import create_tables
 from address_etl.get_address_concatenation import get_address_concatenation
 from address_etl.get_address_iris import get_address_iris
 from address_etl.get_rows import get_rows
 from address_etl.populate_geocode_table import populate_geocode_table
+from address_etl.settings import settings
 from address_etl.write_address_current_staging_rows import (
     write_address_current_staging_rows,
 )
 
 logger = logging.getLogger(__name__)
-
-
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
-
-    sparql_endpoint: str
-    esri_username: str
-    esri_password: str
-
-    sqlite_conn_str: str = "address.db"
-    esri_geocode_rest_api_url: str = (
-        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes/FeatureServer/0/query"
-    )
-    esri_auth_url: str = (
-        "https://qportal.information.qld.gov.au/arcgis/sharing/rest/generateToken"
-    )
-    esri_referer: str = "https://qportal.information.qld.gov.au/arcgis/"
-    populate_geocode_table: bool = False
-    http_retry_max_time: int = 60
 
 
 def populate_address_current_staging_table(
@@ -154,8 +135,6 @@ def main():
 
     start_time = time.time()
     logger.info("Starting ETL process")
-
-    settings = Settings()
 
     connection = sqlite3.connect(settings.sqlite_conn_str)
     try:
