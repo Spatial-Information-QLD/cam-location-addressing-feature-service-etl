@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         "https://qportal.information.qld.gov.au/arcgis/sharing/rest/generateToken"
     )
     esri_referer: str = "https://qportal.information.qld.gov.au/arcgis/"
-    populate_geocode_table: bool = False
+    populate_geocode_table: bool = True
     http_retry_max_time_in_minutes: int = 60
     http_timeout_in_seconds: int = 120
 

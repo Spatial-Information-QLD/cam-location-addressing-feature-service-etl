@@ -100,12 +100,7 @@ def populate_geocode_table(cursor: sqlite3.Cursor):
             range(0, total_count, batch_size),
             description="Processing geocodes",
         ):
-            logger.info(
-                f"Processing records {offset} to {min(offset + batch_size, total_count)}"
-            )
-
             features = fetch_geocodes(client, access_token, offset, batch_size)
-            logger.info(f"Fetched {len(features)} features")
             insert_geocodes(cursor, features)
             cursor.connection.commit()
 

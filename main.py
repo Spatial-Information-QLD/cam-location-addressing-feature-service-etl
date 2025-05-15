@@ -25,6 +25,7 @@ def populate_address_current_staging_table(
     Retrieve all address IRIs from the SPARQL endpoint, page through and retrieve the address data in chunks of 1000, and insert them into the address_current_staging table.
     """
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
+        logger.info("Retrieving address IRIs from SPARQL endpoint")
         address_iris = get_address_iris(sparql_endpoint, client)
         logger.info(f"Retrieved {len(address_iris)} address IRIs to process")
 
