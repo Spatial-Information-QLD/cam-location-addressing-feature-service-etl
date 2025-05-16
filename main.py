@@ -163,8 +163,6 @@ def main():
         print(f"Deleted: {len(rows_deleted)}")
         print(f"Added: {len(rows_added)}")
 
-        # TODO: create indexes on all tables
-        #       index address_pid and id columns
     finally:
         logger.info("Closing connection to SQLite database")
         connection.close()
