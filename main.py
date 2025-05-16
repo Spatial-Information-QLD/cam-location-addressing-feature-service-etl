@@ -5,12 +5,14 @@ import time
 import httpx
 from rich.progress import track
 
+from address_etl.create_row_hash import hash_rows_in_table
 from address_etl.create_tables import create_tables
 from address_etl.get_address_concatenation import get_address_concatenation
 from address_etl.get_address_iris import get_address_iris
 from address_etl.get_rows import get_rows
 from address_etl.populate_geocode_table import populate_geocode_table
 from address_etl.settings import settings
+from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.write_address_current_staging_rows import (
     write_address_current_staging_rows,
 )
@@ -144,6 +146,7 @@ def main():
     logger.info("Starting ETL process")
 
     connection = sqlite3.connect(settings.sqlite_conn_str)
+    connection.row_factory = dict_row_factory
     try:
         cursor = connection.cursor()
         create_tables(cursor)
@@ -151,6 +154,9 @@ def main():
         if settings.populate_geocode_table:
             populate_geocode_table(cursor)
         populate_address_current_table(cursor)
+        hash_rows_in_table("address_current", cursor)
+
+        # TODO: create indexes on all tables
     finally:
         logger.info("Closing connection to SQLite database")
         connection.close()
