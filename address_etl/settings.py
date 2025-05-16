@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     http_retry_max_time_in_seconds: int = 3600
     http_timeout_in_seconds: int = 120
     address_iri_limit: int | None = None
+    geocode_limit: int | None = None
 
 
 settings = Settings()

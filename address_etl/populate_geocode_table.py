@@ -57,7 +57,12 @@ class GeocodeTablePopulator:
     This class handles refreshing the access token if it expires.
     """
 
-    def __init__(self, cursor: sqlite3.Cursor, client: httpx.Client):
+    def __init__(
+        self,
+        cursor: sqlite3.Cursor,
+        client: httpx.Client,
+        total_count: int | None = None,
+    ):
         self.cursor = cursor
         self.client = client
         self.access_token = get_esri_token(
@@ -68,7 +73,7 @@ class GeocodeTablePopulator:
             client,
         )
 
-        self.total_count = get_total_count(
+        self.total_count = total_count or get_total_count(
             settings.esri_geocode_rest_api_url, client, self.access_token
         )
 
@@ -131,7 +136,9 @@ def populate_geocode_table(cursor: sqlite3.Cursor):
     """
     start_time = time.time()
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
-        geocode_populator = GeocodeTablePopulator(cursor, client)
+        geocode_populator = GeocodeTablePopulator(
+            cursor, client, settings.geocode_limit
+        )
         geocode_populator.populate()
 
         logger.info(
