@@ -61,7 +61,6 @@ class GeocodeTablePopulator:
         self,
         cursor: sqlite3.Cursor,
         client: httpx.Client,
-        total_count: int | None = None,
     ):
         self.cursor = cursor
         self.client = client
@@ -73,7 +72,7 @@ class GeocodeTablePopulator:
             client,
         )
 
-        self.total_count = total_count or get_total_count(
+        self.total_count = get_total_count(
             settings.esri_geocode_rest_api_url, client, self.access_token
         )
 
@@ -111,6 +110,7 @@ class GeocodeTablePopulator:
         response = self.client.get(settings.esri_geocode_rest_api_url, params=params)
         response.raise_for_status()
         data = response.json()
+
         try:
             return data["features"]
         except KeyError as error:
@@ -130,17 +130,57 @@ class GeocodeTablePopulator:
             raise error
 
 
+def fetch_geocodes_in_debug_mode(cursor: sqlite3.Cursor, client: httpx.Client):
+    """
+    Fetch geocodes in debug mode.
+
+    Only fetch the geocodes that we have address_pid values for.
+    """
+    access_token = get_esri_token(
+        settings.esri_auth_url,
+        settings.esri_referer,
+        settings.esri_username,
+        settings.esri_password,
+        client,
+    )
+
+    logger.info("Fetching geocodes in debug mode")
+
+    # Get the address_pid values from the address_current_staging table
+    cursor.execute("SELECT address_pid FROM address_current_staging")
+    address_pids = [str(row["address_pid"]) for row in cursor.fetchall()]
+
+    logger.info(f"Found {len(address_pids)} address_pid values")
+
+    # Fetch the geocodes for the address_pid values
+    params = {
+        "where": f"address_pid IN ({', '.join(address_pids)})",
+        "outFields": "geocode_type,address_pid",
+        "returnGeometry": "true",
+        "f": "json",
+        "token": access_token,
+    }
+
+    response = client.get(settings.esri_geocode_rest_api_url, params=params)
+    response.raise_for_status()
+    data = response.json()
+
+    logger.info(f"Found {len(data['features'])} geocodes")
+    insert_geocodes(cursor, data["features"])
+    logger.info("Geocodes loaded successfully")
+
+
 def populate_geocode_table(cursor: sqlite3.Cursor):
     """
     Scrape the geocodes from the Esri feature service and cache them in the database.
     """
     start_time = time.time()
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
-        geocode_populator = GeocodeTablePopulator(
-            cursor, client, settings.geocode_limit
-        )
-        geocode_populator.populate()
-
-        logger.info(
-            f"Geocodes loaded successfully ({geocode_populator.total_count} records) in {time.time() - start_time:.2f} seconds"
-        )
+        if settings.geocode_debug:
+            fetch_geocodes_in_debug_mode(cursor, client)
+        else:
+            geocode_populator = GeocodeTablePopulator(cursor, client)
+            geocode_populator.populate()
+            logger.info(
+                f"Geocodes loaded successfully ({geocode_populator.total_count} records) in {time.time() - start_time:.2f} seconds"
+            )
