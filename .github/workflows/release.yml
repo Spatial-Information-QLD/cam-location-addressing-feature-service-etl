@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+env:
+  IMAGE_NAME: ghcr.io/spatial-information-qld/address-esri-etl
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get release version
+        id: version
+        run: |
+          if ! npx --yes semver ${{ github.event.release.tag_name }} > /dev/null 2>&1; then
+            echo "Error: Invalid semantic version format"
+            exit 1
+          fi
+          echo "VALUE=$(npx --yes semver ${{ github.event.release.tag_name }})" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build container image and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
