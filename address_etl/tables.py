@@ -142,3 +142,28 @@ def create_tables(cursor: sqlite3.Cursor):
     """
     )
     cursor.connection.commit()
+
+
+def create_table_indexes(cursor: sqlite3.Cursor):
+    """
+    Create the indexes required for the address ETL process
+    """
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_address_current_staging_address_pid ON address_current_staging (address_pid)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_geocode_address_pid ON geocode (address_pid)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_address_current_address_pid ON address_current (address_pid)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_address_current_id ON address_current (id)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_address_previous_address_pid ON address_previous (address_pid)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_address_previous_id ON address_previous (id)"
+    )
+    cursor.connection.commit()

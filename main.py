@@ -5,18 +5,18 @@ import time
 import httpx
 from rich.progress import track
 
-from address_etl.table_row_hash import hash_rows_in_table
-from address_etl.tables import create_tables
 from address_etl.address_concat import compute_address_concatenation
+from address_etl.address_current_staging_table import (
+    populate_address_current_staging_rows,
+)
 from address_etl.address_iris import get_address_iris
 from address_etl.address_rows import get_address_rows
 from address_etl.geocode_table import populate_geocode_table
 from address_etl.settings import settings
 from address_etl.sqlite_dict_factory import dict_row_factory
-from address_etl.address_current_staging_table import (
-    populate_address_current_staging_rows,
-)
 from address_etl.table_diff import compute_table_diff
+from address_etl.table_row_hash import hash_rows_in_table
+from address_etl.tables import create_table_indexes, create_tables
 
 logger = logging.getLogger(__name__)
 
@@ -154,9 +154,9 @@ def main():
         populate_address_current_staging_table(settings.sparql_endpoint, cursor)
         if settings.populate_geocode_table:
             populate_geocode_table(cursor)
+        create_table_indexes(cursor)
         populate_address_current_table(cursor)
         hash_rows_in_table("address_current", cursor)
-
         rows_deleted, rows_added = compute_table_diff(
             "address_previous", "address_current", cursor
         )
