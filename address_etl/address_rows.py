@@ -2,7 +2,9 @@ import httpx
 from jinja2 import Template
 
 
-def get_rows(address_iris: list[str], sparql_endpoint: str, client: httpx.Client):
+def get_address_rows(
+    address_iris: list[str], sparql_endpoint: str, client: httpx.Client
+):
     query = Template(
         """
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>

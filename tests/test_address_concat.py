@@ -1,4 +1,4 @@
-from address_etl.get_address_concatenation import get_address_concatenation
+from address_etl.address_concat import compute_address_concatenation
 
 
 def test_get_address_concatenation():
@@ -25,5 +25,5 @@ def test_get_address_concatenation():
         "address_pid": {"value": 2077263},
     }
 
-    address = get_address_concatenation(row)
+    address = compute_address_concatenation(row)
     assert address == "U36/148C Walker Street Townsville City QLD"

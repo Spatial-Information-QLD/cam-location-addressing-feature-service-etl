@@ -4,7 +4,7 @@ import httpx
 from jinja2 import Template
 
 
-def get_address_iris_query(limit: int | None = None):
+def address_iris_query(limit: int | None = None):
     """
     Get the query to get the address IRIs.
     """
@@ -36,7 +36,7 @@ def get_address_iris(
 
     The limit parameter is optional and only used for testing.
     """
-    query = get_address_iris_query(limit)
+    query = address_iris_query(limit)
     response = client.post(
         sparql_endpoint,
         headers={

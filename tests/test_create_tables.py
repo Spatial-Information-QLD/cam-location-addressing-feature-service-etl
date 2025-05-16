@@ -1,6 +1,6 @@
 import sqlite3
 
-from address_etl.create_tables import create_tables
+from address_etl.tables import create_tables
 
 
 def test_create_tables():

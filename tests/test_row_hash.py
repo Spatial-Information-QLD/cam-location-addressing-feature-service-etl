@@ -1,6 +1,6 @@
 import sqlite3
 
-from address_etl.create_row_hash import create_row_hash, hash_rows_in_table
+from address_etl.table_row_hash import create_row_hash, hash_rows_in_table
 from address_etl.sqlite_dict_factory import dict_row_factory
 
 

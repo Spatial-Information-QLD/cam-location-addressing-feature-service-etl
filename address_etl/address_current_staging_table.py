@@ -1,7 +1,7 @@
 import sqlite3
 
 
-def write_address_current_staging_rows(data: list[dict], cursor: sqlite3.Cursor):
+def populate_address_current_staging_rows(data: list[dict], cursor: sqlite3.Cursor):
     query = """
         INSERT INTO address_current_staging VALUES(
             :id,

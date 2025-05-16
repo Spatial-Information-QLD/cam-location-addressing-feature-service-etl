@@ -1,4 +1,4 @@
-def get_address_concatenation(row: dict) -> str:
+def compute_address_concatenation(row: dict) -> str:
     def get_value(key: str) -> str:
         return row.get(key, {}).get("value", "")
 

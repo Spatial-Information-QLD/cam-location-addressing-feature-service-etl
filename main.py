@@ -5,17 +5,18 @@ import time
 import httpx
 from rich.progress import track
 
-from address_etl.create_row_hash import hash_rows_in_table
-from address_etl.create_tables import create_tables
-from address_etl.get_address_concatenation import get_address_concatenation
-from address_etl.get_address_iris import get_address_iris
-from address_etl.get_rows import get_rows
-from address_etl.populate_geocode_table import populate_geocode_table
+from address_etl.table_row_hash import hash_rows_in_table
+from address_etl.tables import create_tables
+from address_etl.address_concat import compute_address_concatenation
+from address_etl.address_iris import get_address_iris
+from address_etl.address_rows import get_address_rows
+from address_etl.geocode_table import populate_geocode_table
 from address_etl.settings import settings
 from address_etl.sqlite_dict_factory import dict_row_factory
-from address_etl.write_address_current_staging_rows import (
-    write_address_current_staging_rows,
+from address_etl.address_current_staging_table import (
+    populate_address_current_staging_rows,
 )
+from address_etl.table_diff import compute_table_diff
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def populate_address_current_staging_table(
         for address_iri_chunk in track(
             address_iri_chunks, description="Processing address IRIs"
         ):
-            rows = get_rows(address_iri_chunk, sparql_endpoint, client)
+            rows = get_address_rows(address_iri_chunk, sparql_endpoint, client)
             modified_rows = []
             for row in rows:
                 data = {}
@@ -72,7 +73,7 @@ def populate_address_current_staging_table(
                 data["locality"] = row.get("locality", {}).get("value")
                 data["local_authority"] = row.get("local_authority", {}).get("value")
                 data["state"] = row.get("state", {}).get("value")
-                data["address"] = get_address_concatenation(row)
+                data["address"] = compute_address_concatenation(row)
                 data["address_status"] = row.get("address_status", {}).get("value")
                 data["address_standard"] = row.get("address_standard", {}).get("value")
                 data["lotplan_status"] = row.get("lotplan_status", {}).get("value")
@@ -83,7 +84,7 @@ def populate_address_current_staging_table(
                 data["longitude"] = None
                 modified_rows.append(data)
 
-            write_address_current_staging_rows(modified_rows, cursor)
+            populate_address_current_staging_rows(modified_rows, cursor)
 
 
 def populate_address_current_table(cursor: sqlite3.Cursor):
@@ -156,7 +157,14 @@ def main():
         populate_address_current_table(cursor)
         hash_rows_in_table("address_current", cursor)
 
+        rows_deleted, rows_added = compute_table_diff(
+            "address_previous", "address_current", cursor
+        )
+        print(f"Deleted: {len(rows_deleted)}")
+        print(f"Added: {len(rows_added)}")
+
         # TODO: create indexes on all tables
+        #       index address_pid and id columns
     finally:
         logger.info("Closing connection to SQLite database")
         connection.close()
