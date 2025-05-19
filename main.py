@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 import time
+from pathlib import Path
 
 import httpx
 from rich.progress import track
@@ -146,6 +147,8 @@ def main():
     start_time = time.time()
     logger.info("Starting ETL process")
 
+    # Create database directory if it doesn't exist.
+    Path(settings.sqlite_conn_str).parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(settings.sqlite_conn_str)
     connection.row_factory = dict_row_factory
     try:
