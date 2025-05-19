@@ -41,7 +41,6 @@ def get_address_rows(
             ?address_standard
             ?lotplan_status
             ?address_pid
-        FROM <http://www.ontotext.com/explicit>
         WHERE {
             VALUES ?iri {
                 {% for address_iri in address_iris %}

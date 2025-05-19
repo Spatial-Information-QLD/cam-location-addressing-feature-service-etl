@@ -10,7 +10,9 @@ def test_get_address_iris_query_limit_10():
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
         SELECT ?iri
         WHERE {
-            ?iri a addr:Address
+            GRAPH <urn:qali:graph:addresses> {
+                ?iri a addr:Address
+            }
         }
 
         LIMIT 10
@@ -26,7 +28,9 @@ def test_get_address_iris_query_no_limit():
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
         SELECT ?iri
         WHERE {
-            ?iri a addr:Address
+            GRAPH <urn:qali:graph:addresses> {
+                ?iri a addr:Address
+            }
         }
     """
     ).strip()

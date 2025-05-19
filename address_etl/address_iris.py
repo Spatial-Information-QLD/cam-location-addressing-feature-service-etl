@@ -15,7 +15,9 @@ def address_iris_query(limit: int | None = None):
                 PREFIX addr: <https://linked.data.gov.au/def/addr/>
                 SELECT ?iri
                 WHERE {
-                    ?iri a addr:Address
+                    GRAPH <urn:qali:graph:addresses> {
+                        ?iri a addr:Address
+                    }
                 }
                 {% if limit %}
                 LIMIT {{ limit }}
