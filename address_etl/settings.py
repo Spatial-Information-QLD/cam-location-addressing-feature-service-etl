@@ -20,5 +20,13 @@ class Settings(BaseSettings):
     address_iri_limit: int | None = None
     geocode_debug: bool = False
 
+    # Minio S3 settings used only for testing
+    # Application code assumes role when running in AWS
+    use_minio: bool = False
+    minio_endpoint: str = "http://localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_region: str = "us-east-1"
+
 
 settings = Settings()

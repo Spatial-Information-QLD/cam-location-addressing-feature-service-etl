@@ -147,10 +147,11 @@ def main():
     start_time = time.time()
     logger.info("Starting ETL process")
 
-    # Create database directory if it doesn't exist.
+    # Create database directory.
     Path(settings.sqlite_conn_str).parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(settings.sqlite_conn_str)
     connection.row_factory = dict_row_factory
+
     try:
         cursor = connection.cursor()
         create_tables(cursor)
@@ -160,11 +161,26 @@ def main():
         create_table_indexes(cursor)
         populate_address_current_table(cursor)
         hash_rows_in_table("address_current", cursor)
+        # TODO Pull sqlite database from S3 from previous ETL run.
+        # TODO Load S3 sqlite database into address_previous table.
         rows_deleted, rows_added = compute_table_diff(
             "address_previous", "address_current", cursor
         )
         print(f"Deleted: {len(rows_deleted)}")
         print(f"Added: {len(rows_added)}")
+
+        # TODO: Sync rows deleted and rows added to remote Esri service.
+        # Deletions:
+        #  - For each address_pid in rows_deleted:
+        #    - delete all rows in SIRRTE with that address_pid.
+        #    - insert all rows in ETL database with the address_pid into SIRRTE.
+        #    - keep a track of the inserted address_pids in inserted_list.
+        #
+        # Insertions:
+        #  - For each address_pid in rows_added:
+        #    - insert all rows in ETL database with the address_pid into SIRRTE that is not in inserted_list.
+
+        # TODO: Upload current ETL database to S3.
 
     finally:
         logger.info("Closing connection to SQLite database")
