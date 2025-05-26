@@ -2,6 +2,7 @@ import pytest
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.waiting_utils import wait_for_logs
 
+from address_etl.s3 import S3
 from address_etl.settings import settings
 
 MINIO_IMAGE = "quay.io/minio/minio:RELEASE.2025-05-24T17-08-30Z"
@@ -27,3 +28,9 @@ def minio_container():
 
     # Clean up
     container.stop()
+
+
+@pytest.fixture(scope="function")
+def s3():
+    s3 = S3(settings)
+    yield s3
