@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     address_iri_limit: int | None = None
     geocode_debug: bool = False
 
+    # pytz
+    timezone: str = "Australia/Brisbane"
+
+    # S3
+    s3_bucket_name: str = "location-addressing-feature-service-etl"
+
     # Minio S3 settings used only for testing
     # Application code assumes role when running in AWS
     use_minio: bool = False

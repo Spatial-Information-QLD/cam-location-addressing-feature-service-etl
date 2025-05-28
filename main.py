@@ -1,9 +1,11 @@
 import logging
 import sqlite3
 import time
+from datetime import datetime
 from pathlib import Path
 
 import httpx
+import pytz
 from rich.progress import track
 
 from address_etl.address_concat import compute_address_concatenation
@@ -13,6 +15,7 @@ from address_etl.address_current_staging_table import (
 from address_etl.address_iris import get_address_iris
 from address_etl.address_rows import get_address_rows
 from address_etl.geocode_table import populate_geocode_table
+from address_etl.s3 import S3, download_file, get_latest_file, upload_file
 from address_etl.settings import settings
 from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.table_diff import compute_table_diff
@@ -20,6 +23,9 @@ from address_etl.table_row_hash import hash_rows_in_table
 from address_etl.tables import create_table_indexes, create_tables
 
 logger = logging.getLogger(__name__)
+
+ADDRESS_PREVIOUS_DB_PATH = "/tmp/address_previous.db"
+S3_FILE_PREFIX_KEY = "etl/"
 
 
 def populate_address_current_staging_table(
@@ -152,6 +158,11 @@ def main():
     connection = sqlite3.connect(settings.sqlite_conn_str)
     connection.row_factory = dict_row_factory
 
+    # Create S3 client.
+    s3 = S3(settings)
+    if not s3.bucket_exists(settings.s3_bucket_name):
+        raise RuntimeError(f"S3 bucket {settings.s3_bucket_name} does not exist.")
+
     try:
         cursor = connection.cursor()
         create_tables(cursor)
@@ -161,13 +172,28 @@ def main():
         create_table_indexes(cursor)
         populate_address_current_table(cursor)
         hash_rows_in_table("address_current", cursor)
-        # TODO Pull sqlite database from S3 from previous ETL run.
-        # TODO Load S3 sqlite database into address_previous table.
+
+        # Get the previous ETL's sqlite database from S3 and
+        # load it into the address_previous table.
+        previous_db = get_latest_file(
+            settings.s3_bucket_name, s3, prefix=S3_FILE_PREFIX_KEY
+        )
+        if previous_db:
+            download_file(
+                settings.s3_bucket_name, previous_db, ADDRESS_PREVIOUS_DB_PATH, s3
+            )
+            cursor.execute("ATTACH DATABASE ? AS previous", (ADDRESS_PREVIOUS_DB_PATH,))
+            cursor.execute(
+                "INSERT INTO address_previous SELECT * FROM previous.address_current"
+            )
+            cursor.connection.commit()
+            cursor.execute("DETACH DATABASE previous")
+
         rows_deleted, rows_added = compute_table_diff(
             "address_previous", "address_current", cursor
         )
-        print(f"Deleted: {len(rows_deleted)}")
-        print(f"Added: {len(rows_added)}")
+        logger.info(f"Deleted: {len(rows_deleted)}")
+        logger.info(f"Added: {len(rows_added)}")
 
         # TODO: Sync rows deleted and rows added to remote Esri service.
         # Deletions:
@@ -180,7 +206,15 @@ def main():
         #  - For each address_pid in rows_added:
         #    - insert all rows in ETL database with the address_pid into SIRRTE that is not in inserted_list.
 
-        # TODO: Upload current ETL database to S3.
+        current_datetime = datetime.now(pytz.UTC)
+        brisbane_time = current_datetime.astimezone(pytz.timezone(settings.timezone))
+        current_datetime_str = brisbane_time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        upload_file(
+            settings.s3_bucket_name,
+            f"{S3_FILE_PREFIX_KEY}{current_datetime_str}/address.db",
+            settings.sqlite_conn_str,
+            s3,
+        )
 
     finally:
         logger.info("Closing connection to SQLite database")

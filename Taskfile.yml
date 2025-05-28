@@ -36,4 +36,4 @@ tasks:
     cmd: docker build -t address-etl .
 
   docker:run:
-    cmd: docker run --rm --network host --env-file .env -v $(pwd)/app-data:/app/data address-etl
+    cmd: docker run --rm --network host --env-file .env address-etl
