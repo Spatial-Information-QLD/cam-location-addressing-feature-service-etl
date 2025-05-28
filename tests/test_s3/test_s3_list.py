@@ -1,5 +1,5 @@
-import pytest
 import botocore.exceptions
+import pytest
 
 from address_etl.s3 import S3
 
@@ -10,6 +10,7 @@ def test_list_buckets(s3: S3):
 
     # Create bucket
     s3.create_bucket("test-bucket")
+    assert s3.bucket_exists("test-bucket")
 
     # List bucket
     buckets = s3.list_buckets()
@@ -17,6 +18,7 @@ def test_list_buckets(s3: S3):
 
     # Delete bucket
     s3.delete_bucket("test-bucket")
+    assert not s3.bucket_exists("test-bucket")
 
     # No buckets
     assert s3.list_buckets() == []
