@@ -161,7 +161,7 @@ def main():
     # Create S3 client.
     s3 = S3(settings)
     if not s3.bucket_exists(settings.s3_bucket_name):
-        s3.create_bucket(settings.s3_bucket_name)
+        raise RuntimeError(f"S3 bucket {settings.s3_bucket_name} does not exist.")
 
     try:
         cursor = connection.cursor()
