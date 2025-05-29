@@ -84,7 +84,7 @@ class GeocodeTablePopulator:
     ) -> list[dict[str, Any]]:
         """Fetch a batch of geocodes from the service"""
         params = {
-            "where": "1=1",
+            "where": "geocode_source = 'LALF'",
             "outFields": "geocode_type,address_pid",
             "returnGeometry": "true",
             "resultOffset": offset,
