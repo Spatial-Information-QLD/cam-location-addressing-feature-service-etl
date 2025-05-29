@@ -7,24 +7,10 @@ import backoff
 import httpx
 from rich.progress import track
 
-from address_etl.esri_rest_api import get_esri_token
+from address_etl.esri_rest_api import get_esri_token, get_total_count
 from address_etl.settings import settings
 
 logger = logging.getLogger(__name__)
-
-
-def get_total_count(esri_url: str, client: httpx.Client, access_token: str) -> int:
-    """Get the total number of records from the service"""
-    params = {
-        "where": "1=1",
-        "returnCountOnly": "true",
-        "f": "json",
-        "token": access_token,
-    }
-
-    response = client.get(esri_url, params=params)
-    response.raise_for_status()
-    return response.json()["count"]
 
 
 def on_backoff_handler(details):
@@ -73,7 +59,7 @@ class GeocodeTablePopulator:
         )
 
         self.total_count = get_total_count(
-            settings.esri_geocode_rest_api_url, client, self.access_token
+            settings.esri_geocode_rest_api_query_url, client, self.access_token
         )
 
     def populate(self):
@@ -107,7 +93,9 @@ class GeocodeTablePopulator:
             "token": self.access_token,
         }
 
-        response = self.client.get(settings.esri_geocode_rest_api_url, params=params)
+        response = self.client.get(
+            settings.esri_geocode_rest_api_query_url, params=params
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -161,7 +149,7 @@ def fetch_geocodes_in_debug_mode(cursor: sqlite3.Cursor, client: httpx.Client):
         "token": access_token,
     }
 
-    response = client.get(settings.esri_geocode_rest_api_url, params=params)
+    response = client.get(settings.esri_geocode_rest_api_query_url, params=params)
     response.raise_for_status()
     data = response.json()
 
