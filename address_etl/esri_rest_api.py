@@ -1,4 +1,8 @@
+import logging
+
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 def get_esri_token(
@@ -17,5 +21,29 @@ def get_esri_token(
     }
 
     response = client.post(esri_auth_url, params=params, data=data)
-    response.raise_for_status()
-    return response.json()["token"]
+    try:
+        response.raise_for_status()
+        return response.json()["token"]
+    except Exception as e:
+        logger.error(f"Error getting ESRI token: {response.text}")
+        raise e
+
+
+def get_total_count(
+    esri_url: str, client: httpx.Client, access_token: str, params: dict | None = None
+) -> int:
+    """Get the total number of records from the service"""
+    params = params or {
+        "where": "1=1",
+        "returnCountOnly": "true",
+        "f": "json",
+    }
+    params["token"] = access_token
+
+    response = client.get(esri_url, params=params)
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        logger.error(f"Error getting total count: {response.text}")
+        raise e
+    return response.json()["count"]
