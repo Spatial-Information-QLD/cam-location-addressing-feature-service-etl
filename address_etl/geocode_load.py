@@ -25,7 +25,9 @@ def on_backoff_handler(details):
     max_time=settings.http_retry_max_time_in_seconds,
     on_backoff=on_backoff_handler,
 )
-def load_geocodes(job_id: int, rows: list[dict[str, Any]], http_timeout: int) -> None:
+def _load_with_backoff(
+    job_id: int, rows: list[dict[str, Any]], http_timeout: int
+) -> None:
     logger.info(f"Loading geocodes for job {job_id} with {len(rows)} rows")
 
     with httpx.Client(timeout=http_timeout) as client:
@@ -66,3 +68,7 @@ def load_geocodes(job_id: int, rows: list[dict[str, Any]], http_timeout: int) ->
             )
 
         logger.info(f"Loaded geocodes for job {job_id} with {len(rows)} rows")
+
+
+def load_geocodes(job_id: int, rows: list[dict[str, Any]], http_timeout: int) -> None:
+    _load_with_backoff(job_id, rows, http_timeout)
