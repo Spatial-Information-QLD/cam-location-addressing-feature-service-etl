@@ -151,10 +151,16 @@ def fetch_geocodes_in_debug_mode(cursor: sqlite3.Cursor, client: httpx.Client):
 
     response = client.get(settings.esri_geocode_rest_api_query_url, params=params)
     response.raise_for_status()
-    data = response.json()
 
-    logger.info(f"Found {len(data['features'])} geocodes")
-    insert_geocodes(cursor, data["features"])
+    try:
+        data = response.json()
+        features = data["features"]
+        logger.info(f"Found {len(features)} geocodes")
+        insert_geocodes(cursor, features)
+    except KeyError:
+        logger.error(f"No features found in the response: {response.text}")
+        raise
+
     logger.info("Geocodes loaded successfully")
 
 
