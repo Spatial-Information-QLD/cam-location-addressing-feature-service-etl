@@ -10,8 +10,6 @@ import json
 from address_etl.esri_rest_api import get_esri_token, get_total_count
 from address_etl.settings import settings
 
-query_url = "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes/FeatureServer/0/query"
-apply_edits_url = "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes/FeatureServer/0/applyEdits"
 batch_size = 2000
 
 logging.basicConfig(
@@ -34,8 +32,9 @@ if __name__ == "__main__":
         )
 
         while True:
+            # Get geocodes count
             total_count = get_total_count(
-                query_url,
+                settings.esri_geocode_rest_api_query_url,
                 client,
                 access_token,
                 params={
@@ -45,10 +44,11 @@ if __name__ == "__main__":
                 },
             )
 
-            logger.info(f"Total geocodes to delete: {total_count}")
+            logger.info(f"Total geocodes with source as LALF: {total_count}")
             if total_count == 0:
                 break
 
+            # Retrieve geocode objectids
             params = {
                 "where": "geocode_source = 'LALF'",
                 "outFields": "objectid",
@@ -58,7 +58,9 @@ if __name__ == "__main__":
                 "resultRecordCount": batch_size,
                 "token": access_token,
             }
-            response = client.get(query_url, params=params)
+            response = client.get(
+                settings.esri_geocode_rest_api_query_url, params=params
+            )
             response.raise_for_status()
             if "error" in response.text:
                 logger.error(f"Error getting geocodes: {response.text}")
@@ -68,13 +70,15 @@ if __name__ == "__main__":
             features = data["features"]
             objectids = [feature["attributes"]["objectid"] for feature in features]
 
-            # Delete
+            # Delete geocodes
             params = {
                 "deletes": json.dumps(objectids),
                 "f": "json",
                 "token": access_token,
             }
-            response = client.post(apply_edits_url, data=params)
+            response = client.post(
+                settings.esri_geocode_rest_api_apply_edit_url, data=params
+            )
             response.raise_for_status()
             if "error" in response.text:
                 logger.error(f"Error deleting geocodes: {response.text}")
