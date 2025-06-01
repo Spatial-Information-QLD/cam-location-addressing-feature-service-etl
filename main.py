@@ -192,8 +192,8 @@ def main():
         rows_deleted, rows_added = compute_table_diff(
             "address_previous", "address_current", cursor
         )
-        logger.info(f"Deleted: {len(rows_deleted)}")
-        logger.info(f"Added: {len(rows_added)}")
+        logger.info(f"Deleted: {len(rows_deleted)} {[row['address_pid'] for row in rows_deleted]}")
+        logger.info(f"Added: {len(rows_added)} {[row['address_pid'] for row in rows_added]}")
 
         # TODO: Sync rows deleted and rows added to remote Esri service.
         # Deletions:

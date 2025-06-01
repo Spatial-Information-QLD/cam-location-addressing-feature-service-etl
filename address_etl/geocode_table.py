@@ -142,7 +142,7 @@ def fetch_geocodes_in_debug_mode(cursor: sqlite3.Cursor, client: httpx.Client):
 
     # Fetch the geocodes for the address_pid values
     params = {
-        "where": f"address_pid IN ({', '.join(address_pids)})",
+        "where": f"geocode_source = 'LALF' AND address_pid IN ({', '.join(address_pids)})",
         "outFields": "geocode_type,address_pid",
         "returnGeometry": "true",
         "f": "json",
