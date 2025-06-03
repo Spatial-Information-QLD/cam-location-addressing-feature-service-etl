@@ -9,6 +9,12 @@ class Settings(BaseSettings):
     esri_password: str
 
     sqlite_conn_str: str = "address.db"
+    esri_location_addressing_rest_api_query_url: str = (
+        "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_maintenance_DEV/FeatureServer/0/query"
+    )
+    esri_location_addressing_rest_api_apply_edit_url: str = (
+        "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_maintenance_DEV/FeatureServer/0/applyEdits"
+    )
     esri_geocode_rest_api_query_url: str = (
         "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes/FeatureServer/0/query"
     )

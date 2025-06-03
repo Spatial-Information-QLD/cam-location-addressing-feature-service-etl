@@ -43,7 +43,7 @@ def get_total_count(
     response = client.get(esri_url, params=params)
     try:
         response.raise_for_status()
+        return int(response.json()["count"])
     except Exception as e:
         logger.error(f"Error getting total count: {response.text}")
         raise e
-    return response.json()["count"]
