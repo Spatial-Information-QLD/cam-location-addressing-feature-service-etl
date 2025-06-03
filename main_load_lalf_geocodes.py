@@ -9,23 +9,26 @@ import concurrent.futures
 import logging
 import csv
 from pathlib import Path
+import time
 
 from address_etl.geocode_load import load_geocodes
 
+# File dumped from cam-etl code.
 CSV_FILE = Path("geocodes_for_esri.csv")
 
 # 10 minutes
 HTTP_TIMEOUT = 600
 MAX_WORKERS = 4
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
+
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-
     if not CSV_FILE.exists():
         raise FileNotFoundError(f"File {CSV_FILE} does not exist.")
 
@@ -61,4 +64,6 @@ def main():
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     main()
+    logger.info(f"Total time taken: {time.time() - start_time:.2f} seconds")
