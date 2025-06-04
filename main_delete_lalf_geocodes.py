@@ -109,4 +109,6 @@ if __name__ == "__main__":
 
             logger.info(f"Deleted {len(objectids)} geocodes")
 
+            token_use -= 1
+
     logger.info(f"Total time taken: {time.time() - start_time:.2f} seconds")
