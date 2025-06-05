@@ -110,8 +110,19 @@ def main():
     errors = []
 
     try:
-        create_geocode_load_table(connection)
-        insert_geocodes_to_db(csv_file, connection)
+        # Only load if the table does not exist.
+        result = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='geocode'"
+        ).fetchone()
+        if not result:
+            logger.info("Table does not exist, create table and load geocodes from csv")
+            create_geocode_load_table(connection)
+            insert_geocodes_to_db(csv_file, connection)
+        else:
+            logger.info(
+                "Table exists, skipping table creation and loading geocodes from csv"
+            )
+
         geocodes = get_not_loaded_geocodes(connection)
         logger.info(f"Found {len(geocodes)} geocodes to load")
 
