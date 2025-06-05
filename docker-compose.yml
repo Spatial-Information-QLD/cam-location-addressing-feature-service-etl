@@ -8,3 +8,29 @@ services:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  localstack:
+    image: localstack/localstack
+    ports:
+      - 4566:4566 # LocalStack Gateway
+      - 4510-4559:4510-4559 # external services port range
+    environment:
+      # LocalStack configuration: https://docs.localstack.cloud/references/configuration/
+      - DEBUG=${DEBUG:-0}
+      - PERSISTENCE=1
+    volumes:
+      - localstack_volume:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    ports:
+      - 8001:8001
+    environment:
+      - DYNAMO_ENDPOINT=http://localstack:4566
+
+volumes:
+  minio_data:
+  localstack_volume:
