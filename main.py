@@ -4,9 +4,13 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import boto3.dynamodb
 import httpx
 import pytz
+import boto3
 from rich.progress import track
+from dynamodblock import DynamoDBLock
+from mypy_boto3_dynamodb.service_resource import Table
 
 from address_etl.address_concat import compute_address_concatenation
 from address_etl.address_current_staging_table import (
@@ -26,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 ADDRESS_PREVIOUS_DB_PATH = "/tmp/address_previous.db"
 S3_FILE_PREFIX_KEY = "etl/"
+LOCK_ID = "address-etl"
 
 
 def populate_address_current_staging_table(
@@ -143,6 +148,19 @@ def populate_address_current_table(cursor: sqlite3.Cursor):
     cursor.connection.commit()
 
 
+def get_lock(lock_id: str, table: Table):
+    lock = DynamoDBLock(
+        lock_id=lock_id,
+        dynamodb_table_resource=table,
+        lock_ttl=86_400,  # 24 hours
+        retry_timeout=600,  # 10 minutes
+        retry_interval=60,  # 1 minute
+        verbose=True,
+        debug=True,
+    )
+    return lock
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -153,72 +171,95 @@ def main():
     start_time = time.time()
     logger.info("Starting ETL process")
 
-    # Create database directory.
-    Path(settings.sqlite_conn_str).parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(settings.sqlite_conn_str)
-    connection.row_factory = dict_row_factory
-
-    # Create S3 client.
-    s3 = S3(settings)
-    if not s3.bucket_exists(settings.s3_bucket_name):
-        raise RuntimeError(f"S3 bucket {settings.s3_bucket_name} does not exist.")
-
-    try:
-        cursor = connection.cursor()
-        create_tables(cursor)
-        populate_address_current_staging_table(settings.sparql_endpoint, cursor)
-        if settings.populate_geocode_table:
-            populate_geocode_table(cursor)
-        create_table_indexes(cursor)
-        populate_address_current_table(cursor)
-        hash_rows_in_table("address_current", cursor)
-
-        # Get the previous ETL's sqlite database from S3 and
-        # load it into the address_previous table.
-        previous_db = get_latest_file(
-            settings.s3_bucket_name, s3, prefix=S3_FILE_PREFIX_KEY
+    if settings.use_minio:
+        dynamodb = boto3.resource(
+            "dynamodb",
+            endpoint_url="http://localhost:4566",
+            region_name=settings.minio_region,
+            aws_access_key_id=settings.minio_access_key,
+            aws_secret_access_key=settings.minio_secret_key,
         )
-        if previous_db:
-            download_file(
-                settings.s3_bucket_name, previous_db, ADDRESS_PREVIOUS_DB_PATH, s3
+    else:
+        dynamodb = boto3.resource("dynamodb")
+    table = dynamodb.Table(settings.lock_table_name)
+    lock = get_lock(LOCK_ID, table)
+
+    with lock.acquire():
+        time.sleep(30)
+        # Create database directory.
+        Path(settings.sqlite_conn_str).parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(settings.sqlite_conn_str)
+        connection.row_factory = dict_row_factory
+
+        # Create S3 client.
+        s3 = S3(settings)
+        if not s3.bucket_exists(settings.s3_bucket_name):
+            raise RuntimeError(f"S3 bucket {settings.s3_bucket_name} does not exist.")
+
+        try:
+            cursor = connection.cursor()
+            create_tables(cursor)
+            populate_address_current_staging_table(settings.sparql_endpoint, cursor)
+            if settings.populate_geocode_table:
+                populate_geocode_table(cursor)
+            create_table_indexes(cursor)
+            populate_address_current_table(cursor)
+            hash_rows_in_table("address_current", cursor)
+
+            # Get the previous ETL's sqlite database from S3 and
+            # load it into the address_previous table.
+            previous_db = get_latest_file(
+                settings.s3_bucket_name, s3, prefix=S3_FILE_PREFIX_KEY
             )
-            cursor.execute("ATTACH DATABASE ? AS previous", (ADDRESS_PREVIOUS_DB_PATH,))
-            cursor.execute(
-                "INSERT INTO address_previous SELECT * FROM previous.address_current"
+            if previous_db:
+                download_file(
+                    settings.s3_bucket_name, previous_db, ADDRESS_PREVIOUS_DB_PATH, s3
+                )
+                cursor.execute(
+                    "ATTACH DATABASE ? AS previous", (ADDRESS_PREVIOUS_DB_PATH,)
+                )
+                cursor.execute(
+                    "INSERT INTO address_previous SELECT * FROM previous.address_current"
+                )
+                cursor.connection.commit()
+                cursor.execute("DETACH DATABASE previous")
+
+            rows_deleted, rows_added = compute_table_diff(
+                "address_previous", "address_current", cursor
             )
-            cursor.connection.commit()
-            cursor.execute("DETACH DATABASE previous")
+            logger.info(
+                f"Deleted: {len(rows_deleted)} {[row['address_pid'] for row in rows_deleted]}"
+            )
+            logger.info(
+                f"Added: {len(rows_added)} {[row['address_pid'] for row in rows_added]}"
+            )
 
-        rows_deleted, rows_added = compute_table_diff(
-            "address_previous", "address_current", cursor
-        )
-        logger.info(f"Deleted: {len(rows_deleted)} {[row['address_pid'] for row in rows_deleted]}")
-        logger.info(f"Added: {len(rows_added)} {[row['address_pid'] for row in rows_added]}")
+            # TODO: Sync rows deleted and rows added to remote Esri service.
+            # Deletions:
+            #  - For each address_pid in rows_deleted:
+            #    - delete all rows in SIRRTE with that address_pid.
+            #    - insert all rows in ETL database with the address_pid into SIRRTE.
+            #    - keep a track of the inserted address_pids in inserted_list.
+            #
+            # Insertions:
+            #  - For each address_pid in rows_added:
+            #    - insert all rows in ETL database with the address_pid into SIRRTE that is not in inserted_list.
 
-        # TODO: Sync rows deleted and rows added to remote Esri service.
-        # Deletions:
-        #  - For each address_pid in rows_deleted:
-        #    - delete all rows in SIRRTE with that address_pid.
-        #    - insert all rows in ETL database with the address_pid into SIRRTE.
-        #    - keep a track of the inserted address_pids in inserted_list.
-        #
-        # Insertions:
-        #  - For each address_pid in rows_added:
-        #    - insert all rows in ETL database with the address_pid into SIRRTE that is not in inserted_list.
+            current_datetime = datetime.now(pytz.UTC)
+            brisbane_time = current_datetime.astimezone(
+                pytz.timezone(settings.timezone)
+            )
+            current_datetime_str = brisbane_time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            upload_file(
+                settings.s3_bucket_name,
+                f"{S3_FILE_PREFIX_KEY}{current_datetime_str}/address.db",
+                settings.sqlite_conn_str,
+                s3,
+            )
 
-        current_datetime = datetime.now(pytz.UTC)
-        brisbane_time = current_datetime.astimezone(pytz.timezone(settings.timezone))
-        current_datetime_str = brisbane_time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        upload_file(
-            settings.s3_bucket_name,
-            f"{S3_FILE_PREFIX_KEY}{current_datetime_str}/address.db",
-            settings.sqlite_conn_str,
-            s3,
-        )
-
-    finally:
-        logger.info("Closing connection to SQLite database")
-        connection.close()
+        finally:
+            logger.info("Closing connection to SQLite database")
+            connection.close()
 
     logger.info("ETL process completed successfully")
     logger.info(f"Total time taken: {time.time() - start_time:.2f} seconds")

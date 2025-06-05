@@ -45,5 +45,8 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minioadmin"
     minio_region: str = "us-east-1"
 
+    # Dynamodb ETL lock
+    lock_table_name: str = "address-etl-lock"
+
 
 settings = Settings()
