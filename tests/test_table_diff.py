@@ -5,16 +5,8 @@ from address_etl.table_diff import compute_table_diff
 
 
 def _create_tables(cursor: sqlite3.Cursor):
-    cursor.execute(
-        """
-        CREATE TABLE previous (id TEXT, name TEXT, type TEXT)
-        """
-    )
-    cursor.execute(
-        """
-        CREATE TABLE current (id TEXT, name TEXT, type TEXT)
-        """
-    )
+    cursor.execute("CREATE TABLE previous (id TEXT, name TEXT, type TEXT)")
+    cursor.execute("CREATE TABLE current (id TEXT, name TEXT, type TEXT)")
 
 
 def _insert_rows(cursor: sqlite3.Cursor, table: str, rows: list[dict]):
