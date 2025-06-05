@@ -185,7 +185,6 @@ def main():
     lock = get_lock(LOCK_ID, table)
 
     with lock.acquire():
-        time.sleep(30)
         # Create database directory.
         Path(settings.sqlite_conn_str).parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(settings.sqlite_conn_str)
@@ -227,12 +226,18 @@ def main():
             rows_deleted, rows_added = compute_table_diff(
                 "address_previous", "address_current", cursor
             )
-            logger.info(
-                f"Deleted: {len(rows_deleted)} {[row['address_pid'] for row in rows_deleted]}"
-            )
-            logger.info(
-                f"Added: {len(rows_added)} {[row['address_pid'] for row in rows_added]}"
-            )
+
+            if len(rows_deleted) <= 10 and len(rows_added) <= 10:
+                logger.info(
+                    f"Deleted: {len(rows_deleted)} {[row['address_pid'] for row in rows_deleted]}"
+                )
+                logger.info(
+                    f"Added: {len(rows_added)} {[row['address_pid'] for row in rows_added]}"
+                )
+            else:
+                logger.info(
+                    f"Deleted: {len(rows_deleted)} rows, Added: {len(rows_added)} rows"
+                )
 
             # TODO: Sync rows deleted and rows added to remote Esri service.
             # Deletions:

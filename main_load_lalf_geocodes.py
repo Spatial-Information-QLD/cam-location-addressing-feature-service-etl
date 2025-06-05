@@ -110,7 +110,6 @@ def main():
     errors = []
 
     try:
-        # Only load if the table does not exist.
         result = connection.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='geocode'"
         ).fetchone()

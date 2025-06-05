@@ -7,7 +7,7 @@ import backoff
 import httpx
 from rich.progress import track
 
-from address_etl.esri_rest_api import get_esri_token, get_total_count
+from address_etl.esri_rest_api import get_esri_token, get_geocode_count
 from address_etl.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class GeocodeTablePopulator:
             client,
         )
 
-        self.total_count = get_total_count(
+        self.total_count = get_geocode_count(
             settings.esri_geocode_rest_api_query_url, client, self.access_token
         )
 
@@ -70,6 +70,8 @@ class GeocodeTablePopulator:
             description="Processing geocodes",
         ):
             features = self.fetch_geocodes(offset, batch_size)
+            if not features:
+                logger.warning(f"No geocodes found for offset {offset}")
             insert_geocodes(self.cursor, features)
             self.cursor.connection.commit()
 
@@ -84,7 +86,7 @@ class GeocodeTablePopulator:
     ) -> list[dict[str, Any]]:
         """Fetch a batch of geocodes from the service"""
         params = {
-            "where": "geocode_source = 'LALF'",
+            "where": "LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%' AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'",
             "outFields": "geocode_type,address_pid",
             "returnGeometry": "true",
             "resultOffset": offset,
