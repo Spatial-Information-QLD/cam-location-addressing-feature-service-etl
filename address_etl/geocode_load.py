@@ -4,7 +4,9 @@ from typing import Any
 
 import httpx
 import backoff
+import sqlite3
 
+from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.settings import settings
 from address_etl.esri_rest_api import get_esri_token
 
@@ -26,9 +28,11 @@ def on_backoff_handler(details):
     on_backoff=on_backoff_handler,
 )
 def _load_with_backoff(
-    job_id: int, rows: list[dict[str, Any]], http_timeout: int
+    job_id: int, rows: list[dict[str, Any]], sqlite_conn_str: str, http_timeout: int
 ) -> None:
     logger.info(f"Loading geocodes for job {job_id} with {len(rows)} rows")
+
+    rowids = [row["rowid"] for row in rows]
 
     with httpx.Client(timeout=http_timeout) as client:
 
@@ -67,8 +71,17 @@ def _load_with_backoff(
                 f"Failed to load geocodes for job {job_id}: {response.text}"
             )
 
+        placeholders = ", ".join(["?"] * len(rowids))
+        query = f"UPDATE geocode SET loaded = TRUE WHERE rowid IN ({placeholders})"
+        with sqlite3.connect(sqlite_conn_str) as connection:
+            connection.row_factory = dict_row_factory
+            connection.execute(query, rowids)
+            connection.commit()
+
         logger.info(f"Loaded geocodes for job {job_id} with {len(rows)} rows")
 
 
-def load_geocodes(job_id: int, rows: list[dict[str, Any]], http_timeout: int) -> None:
-    _load_with_backoff(job_id, rows, http_timeout)
+def load_geocodes(
+    job_id: int, rows: list[dict[str, Any]], sqlite_conn_str: str, http_timeout: int
+) -> None:
+    _load_with_backoff(job_id, rows, sqlite_conn_str, http_timeout)
