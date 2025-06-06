@@ -64,7 +64,7 @@ class GeocodeTablePopulator:
 
     def populate(self):
         logger.info(f"Total records to process: {self.total_count}")
-        batch_size = 10_000
+        batch_size = 2000
         for offset in track(
             range(0, self.total_count, batch_size),
             description="Processing geocodes",
@@ -82,7 +82,7 @@ class GeocodeTablePopulator:
         on_backoff=on_backoff_handler,
     )
     def fetch_geocodes(
-        self, offset: int, batch_size: int = 10000
+        self, offset: int, batch_size: int
     ) -> list[dict[str, Any]]:
         """Fetch a batch of geocodes from the service"""
         params = {
