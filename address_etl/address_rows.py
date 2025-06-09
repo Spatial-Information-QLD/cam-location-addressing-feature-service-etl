@@ -235,7 +235,7 @@ def get_address_rows(
                 OPTIONAL {
                     GRAPH <urn:qali:graph:geographical-names> {
                         ?locality_object sdo:additionalProperty [
-                            sdo:propertyID "local_authority" ;
+                            sdo:propertyID "pndb.lga_name" ;
                             sdo:value ?local_authority
                         ] .
                     }
