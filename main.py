@@ -199,11 +199,6 @@ def main():
             cursor = connection.cursor()
             create_tables(cursor)
             populate_address_current_staging_table(settings.sparql_endpoint, cursor)
-            if settings.populate_geocode_table:
-                populate_geocode_table(cursor)
-            create_table_indexes(cursor)
-            populate_address_current_table(cursor)
-            hash_rows_in_table("address_current", cursor)
 
             # Get the previous ETL's sqlite database from S3 and
             # load it into the address_previous table.
@@ -222,6 +217,22 @@ def main():
                 )
                 cursor.connection.commit()
                 cursor.execute("DETACH DATABASE previous")
+
+            if settings.populate_geocode_table:
+                logger.info("Populating geocode table with previous ETL's result")
+                if settings.geocode_use_previous_result:
+                    cursor.execute(
+                        "ATTACH DATABASE ? AS previous", (ADDRESS_PREVIOUS_DB_PATH,)
+                    )
+                    cursor.execute("INSERT INTO geocode SELECT * FROM previous.geocode")
+                    cursor.connection.commit()
+                    cursor.execute("DETACH DATABASE previous")
+                else:
+                    logger.info("Populating geocode table from remote source")
+                    populate_geocode_table(cursor)
+            create_table_indexes(cursor)
+            populate_address_current_table(cursor)
+            hash_rows_in_table("address_current", cursor)
 
             rows_deleted, rows_added = compute_table_diff(
                 "address_previous", "address_current", cursor

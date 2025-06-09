@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     http_timeout_in_seconds: int = 120
     address_iri_limit: int | None = None
     geocode_debug: bool = False
+    geocode_use_previous_result: bool = False
 
     # pytz
     timezone: str = "Australia/Brisbane"
