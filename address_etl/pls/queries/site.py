@@ -1,0 +1,45 @@
+from textwrap import dedent
+
+
+def get_query():
+    return dedent(
+        """
+        PREFIX addr: <https://linked.data.gov.au/def/addr/>
+        PREFIX cn: <https://linked.data.gov.au/def/cn/>
+        PREFIX sdo: <https://schema.org/>
+
+        SELECT (CONCAT(STR(?parcel_id), "|", STR(?address)) AS ?site_id) ?parent_site_id ?site_type ?parcel_id
+        WHERE {
+            GRAPH <urn:qali:graph:addresses> {
+                ?parcel_id a addr:AddressableObject ;
+                sdo:identifier ?plan_no, ?_lot_no .
+
+                FILTER(DATATYPE(?plan_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/plan>)
+                FILTER(DATATYPE(?_lot_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/lot>).
+
+                ?parcel_id cn:hasName ?address .
+                ?address a addr:Address .
+
+                # Commented out as we can't determine the parent site from the data as there exists some 9999 lotplans with multiple primary addresses.
+                # OPTIONAL {
+                #     ?parent_parcel_id sdo:identifier ?plan_no, "0"^^<https://linked.data.gov.au/dataset/qld-addr/datatype/lot> .
+
+                #     ?parent_parcel_id cn:hasName ?parent_address .
+                #     ?parent_address a addr:Address .
+
+                #     BIND(
+                #         IF(
+                #             STR(?_lot_no) != "0",
+                #             CONCAT(STR(?parent_parcel_id), "|", STR(?parent_address)),
+                #             1/0
+                #         )
+                #         AS ?parent_site_id
+                #     )
+                # }
+
+                BIND("P" AS ?site_type)
+            }
+        }
+        ORDER BY ?parcel_id ?parent_site_id
+        """
+    )

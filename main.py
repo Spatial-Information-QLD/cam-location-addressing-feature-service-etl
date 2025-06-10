@@ -9,8 +9,6 @@ import httpx
 import pytz
 import boto3
 from rich.progress import track
-from dynamodblock import DynamoDBLock
-from mypy_boto3_dynamodb.service_resource import Table
 
 from address_etl.address_concat import compute_address_concatenation
 from address_etl.address_current_staging_table import (
@@ -25,6 +23,7 @@ from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.table_diff import compute_table_diff
 from address_etl.table_row_hash import hash_rows_in_table
 from address_etl.tables import create_table_indexes, create_tables
+from address_etl.dynamodb_lock import get_lock
 
 logger = logging.getLogger(__name__)
 
@@ -146,19 +145,6 @@ def populate_address_current_table(cursor: sqlite3.Cursor):
     """
     )
     cursor.connection.commit()
-
-
-def get_lock(lock_id: str, table: Table):
-    lock = DynamoDBLock(
-        lock_id=lock_id,
-        dynamodb_table_resource=table,
-        lock_ttl=86_400,  # 24 hours
-        retry_timeout=600,  # 10 minutes
-        retry_interval=60,  # 1 minute
-        verbose=True,
-        debug=True,
-    )
-    return lock
 
 
 def main():

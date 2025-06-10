@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     esri_password: str
 
     sqlite_conn_str: str = "address.db"
+    pls_sqlite_conn_str: str = "pls.db"
     esri_location_addressing_rest_api_query_url: str = (
         "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_maintenance_DEV/FeatureServer/0/query"
     )
@@ -27,16 +28,18 @@ class Settings(BaseSettings):
     esri_referer: str = "https://uat-qportal.information.qld.gov.au/arcgis/"
     populate_geocode_table: bool = True
     http_retry_max_time_in_seconds: int = 3600
-    http_timeout_in_seconds: int = 120
+    http_timeout_in_seconds: int = 600
     address_iri_limit: int | None = None
     geocode_debug: bool = False
     geocode_use_previous_result: bool = False
+    pls_geocode_csv_path: str | None = None
 
     # pytz
     timezone: str = "Australia/Brisbane"
 
     # S3
     s3_bucket_name: str = "location-addressing-feature-service-etl"
+    pls_s3_bucket_name: str = "pls-feature-service-etl"
 
     # Minio S3 settings used only for testing
     # Application code assumes role when running in AWS
