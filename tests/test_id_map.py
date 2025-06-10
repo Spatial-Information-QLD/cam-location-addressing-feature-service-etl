@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 from address_etl.sqlite_dict_factory import dict_row_factory
-from address_etl.id_map import text_to_id
+from address_etl.id_map import text_to_id_for_pk
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ def test_empty_map_table(connection: sqlite3.Connection):
     )
     connection.commit()
 
-    text_to_id("parcel_id_map", "parcel", "parcel_id", cursor)
+    text_to_id_for_pk("parcel_id_map", "parcel", "parcel_id", cursor)
 
     # Check that there are 10 entries in parcel_id_map now.
     cursor.execute("SELECT COUNT(*) as count FROM parcel_id_map")
@@ -180,7 +180,7 @@ def test_map_table_with_some_values(connection: sqlite3.Connection):
     cursor.execute("SELECT COUNT(*) as count FROM parcel")
     assert cursor.fetchone()["count"] == 10
 
-    text_to_id("parcel_id_map", "parcel", "parcel_id", cursor)
+    text_to_id_for_pk("parcel_id_map", "parcel", "parcel_id", cursor)
 
     # Now 10 values in the map table.
     cursor.execute("SELECT COUNT(*) as count FROM parcel_id_map")
