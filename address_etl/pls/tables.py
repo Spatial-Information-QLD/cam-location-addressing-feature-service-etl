@@ -7,7 +7,7 @@ import httpx
 
 from address_etl.settings import settings
 from address_etl.pls.queries import local_auth, locality, road, parcel, site, address
-from address_etl.id_map import text_to_id_for_pk, text_to_id_for_pk_migrate_column
+from address_etl.id_map import text_to_id_for_pk
 
 logger = logging.getLogger(__name__)
 
@@ -142,9 +142,9 @@ def create_address_tables(cursor: sqlite3.Cursor):
     cursor.execute(
         """
         CREATE TABLE lf_address (
+            addr_id TEXT PRIMARY KEY,
             address_pid TEXT NOT NULL,
             parcel_id TEXT NOT NULL,
-            addr_id TEXT PRIMARY KEY,
             addr_status_code TEXT CHECK (length(addr_status_code) = 1) NOT NULL,
             unit_type TEXT CHECK (length(unit_type) <= 50),
             unit_no TEXT CHECK (length(unit_no) <= 5),
@@ -178,7 +178,7 @@ def create_address_tables(cursor: sqlite3.Cursor):
 
 
 def create_tables(cursor: sqlite3.Cursor):
-    cursor.execute("PRAGMA foreign_keys = OFF")
+    cursor.execute("PRAGMA foreign_keys = ON")
     create_locality_tables(cursor)
     create_road_tables(cursor)
     create_parcel_tables(cursor)
@@ -491,10 +491,3 @@ def populate_tables(cursor: sqlite3.Cursor):
     text_to_id_for_pk("lf_parcel_id_map", "lf_parcel", "parcel_id", cursor)
     text_to_id_for_pk("lf_site_id_map", "lf_site", "site_id", cursor)
     text_to_id_for_pk("lf_address_id_map", "lf_address", "addr_id", cursor)
-
-    text_to_id_for_pk_migrate_column("lf_road", "road_id", cursor)
-    text_to_id_for_pk_migrate_column("lf_parcel", "parcel_id", cursor)
-    text_to_id_for_pk_migrate_column("lf_site", "site_id", cursor)
-    text_to_id_for_pk_migrate_column("lf_address", "addr_id", cursor)
-
-    cursor.execute("PRAGMA foreign_keys = ON")
