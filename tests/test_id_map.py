@@ -108,7 +108,7 @@ def test_empty_map_table(connection: sqlite3.Connection):
     results = cursor.fetchall()
     assert len(results) == 10
     for row in results:
-        assert row["parcel_id"] == row["id"]
+        assert int(row["parcel_id"]) == row["id"]
         assert row["iri"].startswith("http")
 
 
@@ -211,5 +211,5 @@ def test_map_table_with_some_values(connection: sqlite3.Connection):
     results = cursor.fetchall()
     assert len(results) == 10
     for row in results:
-        assert row["parcel_id"] == row["id"]
+        assert int(row["parcel_id"]) == row["id"]
         assert row["iri"].startswith("http")

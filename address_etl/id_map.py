@@ -35,10 +35,13 @@ def text_to_id_for_pk(
 
     cursor.execute(
         f"""
-        SELECT {pk_column_name}
+        SELECT rowid, {pk_column_name}
         FROM {table_name}
-        LEFT JOIN {map_table_name} ON {table_name}.{pk_column_name} = {map_table_name}.iri
-        WHERE {map_table_name}.iri IS NULL
+        WHERE {pk_column_name} NOT IN (
+            SELECT iri FROM {map_table_name}
+            UNION
+            SELECT id FROM {map_table_name}
+        );
         """
     )
     results = cursor.fetchall()
@@ -54,40 +57,58 @@ def text_to_id_for_pk(
 
     # Update the focus table to have the integer value of the map table
     logger.info(f"Updating {table_name} to have the integer value of {map_table_name}")
-
-    cursor.execute(f"SELECT COUNT(*) as count FROM {table_name}")
-    total_rows = cursor.fetchone()["count"]
+    cursor.execute(
+        f"SELECT {table_name}.rowid FROM {table_name} LEFT JOIN {map_table_name} ON {table_name}.{pk_column_name} = {map_table_name}.id WHERE {map_table_name}.id IS NULL"
+    )
+    results = cursor.fetchall()
+    total_rows = len(results)
     batch_size = 10000
 
     for offset in range(0, total_rows, batch_size):
         logger.info(
             f"Processing batch {offset//batch_size + 1} of {(total_rows + batch_size - 1)//batch_size}"
         )
-        cursor.execute(
-            f"""
+
+        query = f"""
             UPDATE {table_name}
             SET {pk_column_name} = (
                 SELECT id 
                 FROM {map_table_name} 
                 WHERE iri = {table_name}.{pk_column_name}
             )
-            WHERE rowid IN (
-                SELECT rowid 
-                FROM {table_name} 
-                LIMIT {batch_size} 
-                OFFSET {offset}
-            )
-            """
-        )
+            WHERE {table_name}.rowid IN ({', '.join(str(row["rowid"]) for row in results[offset:offset+batch_size])})
+        """
+        cursor.execute(query)
         cursor.connection.commit()
+
+    logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
+
+
+def text_to_id_for_pk_migrate_column(
+    table_name: str,
+    pk_column_name: str,
+    cursor: sqlite3.Cursor,
+):
+
+    # Get all existing indexes before dropping the table
+    logger.info(f"Getting existing indexes for {table_name}")
+    cursor.execute(
+        f"SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='{table_name}'"
+    )
+    indexes = cursor.fetchall()
+
+    # Get the table info to check for PRIMARY KEY
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    table_info = cursor.fetchall()
+    pk_info = next((col for col in table_info if col["pk"] > 0), None)
 
     # Create a new table, changing the id column of the focus table to be of type INTEGER.
     logger.info(f"Creating new table {table_name}_new")
     cursor.execute(
         f"""
         CREATE TABLE {table_name}_new (
-            {pk_column_name} INTEGER UNIQUE,
-            {', '.join(f"{col['name']} {col['type']}" for col in cursor.execute(f"PRAGMA table_info({table_name})").fetchall() if col['name'] != pk_column_name)}
+            {pk_column_name} INTEGER{' PRIMARY KEY' if pk_info and pk_info['name'] == pk_column_name else ''},
+            {', '.join(f"{col['name']} {col['type']}" for col in table_info if col['name'] != pk_column_name)}
         )
         """
     )
@@ -109,6 +130,49 @@ def text_to_id_for_pk(
     logger.info(f"Renaming {table_name}_new to {table_name}")
     cursor.execute(f"ALTER TABLE {table_name}_new RENAME TO {table_name}")
 
-    cursor.connection.commit()
+    # Recreate all indexes
+    logger.info(f"Recreating indexes for {table_name}")
 
-    logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
+    # First, create the PRIMARY KEY index if needed
+    if pk_info and pk_info["name"] == pk_column_name:
+        logger.info(f"Creating PRIMARY KEY index for {table_name}")
+        cursor.execute(
+            f"CREATE UNIQUE INDEX idx_{table_name}_{pk_column_name} ON {table_name} ({pk_column_name})"
+        )
+
+    # Then recreate all other indexes
+    for index in indexes:
+        if index["sql"] is not None:
+            # Replace the old table name with the new one in the index creation SQL
+            index_sql = index["sql"].replace(f"ON {table_name}", f"ON {table_name}")
+            cursor.execute(index_sql)
+        else:
+            # For indexes without SQL (like auto-generated ones), we'll need to recreate them based on the table structure
+            # Get the index info to determine if it's unique
+            cursor.execute(f"PRAGMA index_info('{index['name']}')")
+            index_info = cursor.fetchall()
+            if index_info:
+                # Get the columns in the index
+                columns = []
+                for info in index_info:
+                    cursor.execute(f"PRAGMA table_info('{table_name}')")
+                    table_info = cursor.fetchall()
+                    if info["cid"] < len(table_info):
+                        columns.append(table_info[info["cid"]]["name"])
+
+                if columns:
+                    # Check if it's a unique index
+                    cursor.execute(f"PRAGMA index_list('{table_name}')")
+                    index_list = cursor.fetchall()
+                    is_unique = any(
+                        idx["name"] == index["name"] and idx["unique"]
+                        for idx in index_list
+                    )
+
+                    # Recreate the index
+                    unique_str = "UNIQUE " if is_unique else ""
+                    cursor.execute(
+                        f"CREATE {unique_str}INDEX {index['name']} ON {table_name} ({', '.join(columns)})"
+                    )
+
+    cursor.connection.commit()

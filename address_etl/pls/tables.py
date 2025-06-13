@@ -7,7 +7,7 @@ import httpx
 
 from address_etl.settings import settings
 from address_etl.pls.queries import local_auth, locality, road, parcel, site, address
-from address_etl.id_map import text_to_id_for_pk
+from address_etl.id_map import text_to_id_for_pk, text_to_id_for_pk_migrate_column
 
 logger = logging.getLogger(__name__)
 
@@ -398,11 +398,11 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Found {len(rows)} address rows")
     for row in rows:
         cursor.execute(
-            "INSERT INTO lf_address (address_pid, parcel_id, addr_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO lf_address (addr_id, address_pid, parcel_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
+                row["addr_id"]["value"],
                 row["address_pid"]["value"],
                 row["parcel_id"]["value"],
-                row["addr_id"]["value"],
                 row["addr_status_code"]["value"],
                 row.get("unit_type", {}).get("value"),
                 row.get("unit_no", {}).get("value"),
@@ -490,6 +490,11 @@ def populate_tables(cursor: sqlite3.Cursor):
     text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)
     text_to_id_for_pk("lf_parcel_id_map", "lf_parcel", "parcel_id", cursor)
     text_to_id_for_pk("lf_site_id_map", "lf_site", "site_id", cursor)
-    text_to_id_for_pk("lf_address_id_map", "lf_address", "address_id", cursor)
+    text_to_id_for_pk("lf_address_id_map", "lf_address", "addr_id", cursor)
+
+    text_to_id_for_pk_migrate_column("lf_road", "road_id", cursor)
+    text_to_id_for_pk_migrate_column("lf_parcel", "parcel_id", cursor)
+    text_to_id_for_pk_migrate_column("lf_site", "site_id", cursor)
+    text_to_id_for_pk_migrate_column("lf_address", "addr_id", cursor)
 
     cursor.execute("PRAGMA foreign_keys = ON")
