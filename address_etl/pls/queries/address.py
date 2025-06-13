@@ -40,9 +40,9 @@ def get_query():
                     addr:hasStatus ?addr_status .
                 FILTER(DATATYPE(?address_pid) = <https://linked.data.gov.au/dataset/qld-addr/datatype/address-pid>)
                 
-                # addr_id
-                BIND(CONCAT(STR(?addr_iri), "/", ?road_id) AS ?addr_id)
-                
+                # addr id
+                BIND(CONCAT(STR(?addr_iri), "/", ?road_id, "/", STR(?parcel_id)) AS ?addr_id)
+
                 # addr status code
                 GRAPH ?addr_status_vocab_graph {
                     ?addr_status skos:notation ?addr_status_code .
