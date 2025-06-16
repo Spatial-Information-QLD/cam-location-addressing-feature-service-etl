@@ -70,4 +70,5 @@ def get_count(
         return int(response.json()["count"])
     except Exception as e:
         logger.error(f"Error getting records count: {response.text}")
+        logger.info(f"Where clause: {where_clause}")
         raise e
