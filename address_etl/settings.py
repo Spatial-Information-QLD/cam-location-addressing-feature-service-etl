@@ -11,21 +11,21 @@ class Settings(BaseSettings):
     sqlite_conn_str: str = "address.db"
     pls_sqlite_conn_str: str = "pls.db"
     esri_location_addressing_rest_api_query_url: str = (
-        "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_maintenance_DEV/FeatureServer/0/query"
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_Maintenance_UAT/FeatureServer/0/query"
     )
     esri_location_addressing_rest_api_apply_edit_url: str = (
-        "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_maintenance_DEV/FeatureServer/0/applyEdits"
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_Maintenance_UAT/FeatureServer/0/applyEdits"
     )
     esri_geocode_rest_api_query_url: str = (
-        "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes/FeatureServer/0/query"
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes_UAT/FeatureServer/0/query"
     )
     esri_geocode_rest_api_apply_edit_url: str = (
-        "https://uat-qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes/FeatureServer/0/applyEdits"
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes_UAT/FeatureServer/0/applyEdits"
     )
     esri_auth_url: str = (
-        "https://uat-qportal.information.qld.gov.au/arcgis/sharing/rest/generateToken"
+        "https://qportal.information.qld.gov.au/arcgis/sharing/rest/generateToken"
     )
-    esri_referer: str = "https://uat-qportal.information.qld.gov.au/arcgis/"
+    esri_referer: str = "https://qportal.information.qld.gov.au/arcgis/"
     populate_geocode_table: bool = True
     http_retry_max_time_in_seconds: int = 3600
     http_timeout_in_seconds: int = 600
