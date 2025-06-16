@@ -7,7 +7,7 @@ import backoff
 import httpx
 from rich.progress import track
 
-from address_etl.esri_rest_api import get_esri_token, get_geocode_count
+from address_etl.esri_rest_api import get_esri_token
 from address_etl.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,26 @@ def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         """,
             (attrs["address_pid"], attrs["geocode_type"], geom["x"], geom["y"]),
         )
+
+
+def get_geocode_count(
+    esri_url: str, client: httpx.Client, access_token: str, params: dict | None = None
+) -> int:
+    """Get the total number of geocodes from the service"""
+    params = params or {
+        "where": "LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%' AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'",
+        "returnCountOnly": "true",
+        "f": "json",
+    }
+    params["token"] = access_token
+
+    response = client.get(esri_url, params=params)
+    try:
+        response.raise_for_status()
+        return int(response.json()["count"])
+    except Exception as e:
+        logger.error(f"Error getting total count: {response.text}")
+        raise e
 
 
 class GeocodeTablePopulator:
@@ -81,9 +101,7 @@ class GeocodeTablePopulator:
         max_time=settings.http_retry_max_time_in_seconds,
         on_backoff=on_backoff_handler,
     )
-    def fetch_geocodes(
-        self, offset: int, batch_size: int
-    ) -> list[dict[str, Any]]:
+    def fetch_geocodes(self, offset: int, batch_size: int) -> list[dict[str, Any]]:
         """Fetch a batch of geocodes from the service"""
         params = {
             "where": "LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%' AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'",

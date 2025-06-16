@@ -49,12 +49,16 @@ def get_total_count(
         raise e
 
 
-def get_geocode_count(
-    esri_url: str, client: httpx.Client, access_token: str, params: dict | None = None
+def get_count(
+    where_clause: str,
+    esri_url: str,
+    client: httpx.Client,
+    access_token: str,
+    params: dict | None = None,
 ) -> int:
-    """Get the total number of geocodes from the service"""
+    """Get the number of records from the service that match the where clause"""
     params = params or {
-        "where": "LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%' AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'",
+        "where": where_clause,
         "returnCountOnly": "true",
         "f": "json",
     }
@@ -65,5 +69,5 @@ def get_geocode_count(
         response.raise_for_status()
         return int(response.json()["count"])
     except Exception as e:
-        logger.error(f"Error getting total count: {response.text}")
+        logger.error(f"Error getting records count: {response.text}")
         raise e

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytz
 
-from address_etl.geocode_table import populate_geocode_table
+from address_etl.geocode import import_geocodes
 from address_etl.s3 import S3, download_file, get_latest_file, upload_file
 from address_etl.settings import settings
 from address_etl.sqlite_dict_factory import dict_row_factory
@@ -64,9 +64,16 @@ def main():
             previous_db = get_latest_file(
                 settings.s3_bucket_name, s3, prefix=S3_FILE_PREFIX_KEY
             )
+            previous_etl_start_time = None
             if previous_db:
                 download_file(
                     settings.s3_bucket_name, previous_db, ADDRESS_PREVIOUS_DB_PATH, s3
+                )
+
+                # Get the previous ETL's start time from the metadata table.
+                cursor.execute("SELECT start_time FROM metadata")
+                previous_etl_start_time = datetime.fromisoformat(
+                    cursor.fetchone()["start_time"]
                 )
 
                 # Load the previous ETL's address_current table into the address_previous table.
@@ -87,7 +94,7 @@ def main():
 
                 cursor.execute("DETACH DATABASE previous")
 
-            # fetch_new_geocodes(cursor)
+            import_geocodes(cursor, previous_etl_start_time)
             create_table_indexes(cursor)
             populate_address_current_table(cursor)
             hash_rows_in_table("address_current", cursor)

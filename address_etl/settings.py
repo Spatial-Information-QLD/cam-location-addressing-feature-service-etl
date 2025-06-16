@@ -30,8 +30,6 @@ class Settings(BaseSettings):
     http_retry_max_time_in_seconds: int = 3600
     http_timeout_in_seconds: int = 600
     address_iri_limit: int | None = None
-    geocode_debug: bool = False
-    geocode_use_previous_result: bool = False
     pls_geocode_csv_path: str | None = None
 
     # pytz
