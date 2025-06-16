@@ -88,6 +88,7 @@ def create_parcel_tables(cursor: sqlite3.Cursor):
     )
 
     create_id_map_table("lf_parcel_id_map", cursor)
+    cursor.execute("CREATE INDEX idx_lf_parcel_plan_lot ON lf_parcel(plan_no, lot_no)")
 
 
 def create_site_tables(cursor: sqlite3.Cursor):
