@@ -64,7 +64,7 @@ class GeocodeImporter:
 
         self.where_clause = "(geocode_status IS NULL OR geocode_status <> 'H') AND LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%' AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'"
         if esri_date:
-            self.where_clause += f" AND last_edited_date >= '{esri_date}'"
+            self.where_clause += f" AND last_edited_date >= DATE '{esri_date}'"
 
         self.geocode_count = get_count(
             self.where_clause,
