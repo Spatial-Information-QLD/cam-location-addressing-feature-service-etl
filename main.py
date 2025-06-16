@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytz
 
+from address_etl.crud import delete_records_from_esri, insert_addresses_into_esri
 from address_etl.geocode import import_geocodes
 from address_etl.s3 import S3, download_file, get_latest_file, upload_file
 from address_etl.settings import settings
@@ -86,9 +87,6 @@ def main():
                 cursor.connection.commit()
 
                 # Load the previous ETL's geocodes into the geocode table.
-                cursor.execute(
-                    "ATTACH DATABASE ? AS previous", (ADDRESS_PREVIOUS_DB_PATH,)
-                )
                 cursor.execute("INSERT INTO geocode SELECT * FROM previous.geocode")
                 cursor.connection.commit()
 
@@ -104,27 +102,28 @@ def main():
             )
 
             if len(rows_deleted) <= 10 and len(rows_added) <= 10:
-                logger.info(
-                    f"Deleted: {len(rows_deleted)} {[row['address_pid'] for row in rows_deleted]}"
-                )
-                logger.info(
-                    f"Added: {len(rows_added)} {[row['address_pid'] for row in rows_added]}"
-                )
+                logger.info(f"Deleted: {len(rows_deleted)} {rows_deleted}")
+                logger.info(f"Added: {len(rows_added)} {rows_added}")
             else:
                 logger.info(
                     f"Deleted: {len(rows_deleted)} rows, Added: {len(rows_added)} rows"
                 )
 
-            # TODO: Sync rows deleted and rows added to remote Esri service.
-            # Deletions:
-            #  - For each address_pid in rows_deleted:
-            #    - delete all rows in SIRRTE with that address_pid.
-            #    - insert all rows in ETL database with the address_pid into SIRRTE.
-            #    - keep a track of the inserted address_pids in inserted_list.
-            #
-            # Insertions:
-            #  - For each address_pid in rows_added:
-            #    - insert all rows in ETL database with the address_pid into SIRRTE that is not in inserted_list.
+            # Sync rows deleted and rows added to remote Esri service.
+            # First delete the addresses.
+            # Then insert the addresses.
+            # The addresses that need to be inserted are the union of rows_added and rows_deleted.
+            if rows_deleted:
+                delete_records_from_esri(
+                    where_clause=f"address_pid IN ({','.join(rows_deleted)})",
+                    esri_url=settings.esri_location_addressing_rest_api_apply_edit_url,
+                )
+            if rows_union := rows_added | rows_deleted:
+                insert_addresses_into_esri(
+                    rows_union,
+                    settings.esri_location_addressing_rest_api_apply_edit_url,
+                    cursor,
+                )
 
             current_datetime = datetime.now(pytz.UTC)
             brisbane_time = utc_to_brisbane_time(current_datetime)

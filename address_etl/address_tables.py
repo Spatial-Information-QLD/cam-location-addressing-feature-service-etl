@@ -153,6 +153,16 @@ def create_tables(cursor: sqlite3.Cursor):
     """
     )
 
+    logger.info("Creating address_current_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE address_current_loaded (
+            address_pid TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+        """
+    )
+
     create_metadata_table(cursor)
 
     cursor.connection.commit()

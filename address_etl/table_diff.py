@@ -4,32 +4,32 @@ import sqlite3
 def get_deleted_rows(table_previous: str, table_current: str, cursor: sqlite3.Cursor):
     cursor.execute(
         f"""
-        SELECT p.*
+        SELECT DISTINCT p.address_pid
         FROM {table_previous} p
         LEFT JOIN {table_current} c ON p.id = c.id
         WHERE c.id IS NULL
         """
     )
     rows_deleted = cursor.fetchall()
-    return rows_deleted
+    return set([row["address_pid"] for row in rows_deleted])
 
 
 def get_added_rows(table_previous: str, table_current: str, cursor: sqlite3.Cursor):
     cursor.execute(
         f"""
-        SELECT c.*
+        SELECT DISTINCT c.address_pid
         FROM {table_current} c
         LEFT JOIN {table_previous} p ON c.id = p.id
         WHERE p.id IS NULL
         """
     )
     rows_added = cursor.fetchall()
-    return rows_added
+    return set([row["address_pid"] for row in rows_added])
 
 
 def compute_table_diff(
     table_previous: str, table_current: str, cursor: sqlite3.Cursor
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[set[str], set[str]]:
     """
     Compute the difference between two tables.
     """
