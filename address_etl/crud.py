@@ -129,6 +129,7 @@ def insert_addresses_into_esri(
             SELECT
                 lot,
                 plan,
+                address,
                 unit_number,
                 unit_type,
                 street_number,
@@ -148,6 +149,7 @@ def insert_addresses_into_esri(
                 address_standard,
                 lotplan_status,
                 address_pid,
+                geocode_type,
                 latitude,
                 longitude
             FROM address_current
@@ -166,23 +168,23 @@ def insert_addresses_into_esri(
                 settings.esri_password,
                 client,
             )
+            adds_data = json.dumps(
+                [
+                    {
+                        "attributes": row,
+                        "geometry": {
+                            "x": row["longitude"],
+                            "y": row["latitude"],
+                            "spatialReference": {"wkid": 4283},
+                        },
+                    }
+                    for row in addresses
+                ]
+            )
             payload = {
                 "f": "json",
                 "token": access_token,
-                "adds": json.dumps(
-                    [
-                        {
-                            "attributes": row,
-                            "geometry": {
-                                "x": row["longitude"],
-                                "y": row["latitude"],
-                                "z": 0,
-                                "spatialReference": {"wkid": 4283},
-                            },
-                        }
-                        for row in addresses
-                    ]
-                ),
+                "adds": adds_data,
             }
             response = client.post(esri_url, data=payload)
 
