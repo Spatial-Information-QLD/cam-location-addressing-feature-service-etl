@@ -95,7 +95,9 @@ def main():
             import_geocodes(cursor, previous_etl_start_time)
             create_table_indexes(cursor)
             populate_address_current_table(cursor)
-            hash_rows_in_table("address_current", cursor)
+            hash_rows_in_table(
+                "address_current", cursor, exclude_columns=("rowid", "id")
+            )
 
             rows_deleted, rows_added = compute_table_diff(
                 "address_previous", "address_current", cursor
