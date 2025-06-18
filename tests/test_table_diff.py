@@ -22,9 +22,9 @@ def test_get_table_diff_no_changes():
     _create_tables(cursor)
     _insert_rows(cursor, "previous", [{"id": "1", "name": "John", "type": "person"}])
     _insert_rows(cursor, "current", [{"id": "1", "name": "John", "type": "person"}])
-    rows_deleted, rows_added = compute_table_diff("previous", "current", cursor)
-    assert rows_deleted == []
-    assert rows_added == []
+    rows_deleted, rows_added = compute_table_diff("id", "id", "previous", "current", cursor)
+    assert rows_deleted == set()
+    assert rows_added == set()
 
 
 def test_get_table_diff_rows_deleted():
@@ -41,9 +41,9 @@ def test_get_table_diff_rows_deleted():
         ],
     )
     _insert_rows(cursor, "current", [{"id": "2", "name": "John2", "type": "person"}])
-    rows_deleted, rows_added = compute_table_diff("previous", "current", cursor)
-    assert rows_deleted == [{"id": "1", "name": "John", "type": "person"}]
-    assert rows_added == []
+    rows_deleted, rows_added = compute_table_diff("id", "id", "previous", "current", cursor)
+    assert rows_deleted == {"1"}
+    assert rows_added == set()
 
 
 def test_get_table_diff_rows_added():
@@ -60,9 +60,9 @@ def test_get_table_diff_rows_added():
             {"id": "2", "name": "John2", "type": "person"},
         ],
     )
-    rows_deleted, rows_added = compute_table_diff("previous", "current", cursor)
-    assert rows_deleted == []
-    assert rows_added == [{"id": "2", "name": "John2", "type": "person"}]
+    rows_deleted, rows_added = compute_table_diff("id", "id", "previous", "current", cursor)
+    assert rows_deleted == set()
+    assert rows_added == {"2"}
 
 
 def test_get_table_diff_rows_deleted_and_added():
@@ -72,6 +72,6 @@ def test_get_table_diff_rows_deleted_and_added():
     _create_tables(cursor)
     _insert_rows(cursor, "previous", [{"id": "1", "name": "John", "type": "person"}])
     _insert_rows(cursor, "current", [{"id": "2", "name": "John2", "type": "person"}])
-    rows_deleted, rows_added = compute_table_diff("previous", "current", cursor)
-    assert rows_deleted == [{"id": "1", "name": "John", "type": "person"}]
-    assert rows_added == [{"id": "2", "name": "John2", "type": "person"}]
+    rows_deleted, rows_added = compute_table_diff("id", "id", "previous", "current", cursor)
+    assert rows_deleted == {"1"}
+    assert rows_added == {"2"}

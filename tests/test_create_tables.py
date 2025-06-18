@@ -1,6 +1,6 @@
 import sqlite3
 
-from address_etl.tables import create_tables
+from address_etl.address_tables import create_tables
 
 
 def test_create_tables():
@@ -15,6 +15,8 @@ def test_create_tables():
             ("address_previous",),
             ("address_current_staging",),
             ("address_current",),
+            ("address_current_loaded",),
+            ("metadata",),
         ]
     finally:
         connection.close()

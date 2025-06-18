@@ -100,7 +100,7 @@ def main():
             )
 
             rows_deleted, rows_added = compute_table_diff(
-                "address_previous", "address_current", cursor
+                "id", "address_pid", "address_previous", "address_current", cursor
             )
 
             if len(rows_deleted) <= 10 and len(rows_added) <= 10:
