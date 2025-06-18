@@ -1,4 +1,7 @@
 import sqlite3
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def create_metadata_table(cursor: sqlite3.Cursor):
@@ -6,6 +9,7 @@ def create_metadata_table(cursor: sqlite3.Cursor):
 
     The metadata table is used to store the metadata for the ETL run.
     """
+    logger.info("Creating metadata table")
     cursor.execute(
         """
         CREATE TABLE metadata (
