@@ -172,6 +172,7 @@ def create_table_indexes(cursor: sqlite3.Cursor):
     """
     Create the indexes required for the address ETL process
     """
+    logger.info("Creating table indexes")
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_address_current_staging_address_pid ON address_current_staging (address_pid)"
     )
