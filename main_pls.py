@@ -17,6 +17,7 @@ from address_etl.metadata import metadata_write_start_time, metadata_write_end_t
 from address_etl.s3 import upload_file
 from address_etl.geocode import import_geocodes
 from address_etl.table_row_hash import hash_rows_in_table
+from address_etl.pls.diff_and_sync import compute_diff_and_sync
 
 PREVIOUS_DB_PATH = "/tmp/pls_previous.db"
 S3_FILE_PREFIX_KEY = "pls-etl/"
@@ -118,6 +119,7 @@ def main():
                     cursor.connection.commit()
 
                 cursor.execute("DETACH DATABASE previous")
+                cursor.connection.commit()
 
             import_geocodes(cursor, previous_etl_start_time, is_pls=True)
             populate_tables(cursor)
@@ -142,9 +144,7 @@ def main():
                 "locality_code", "hash", "locality", cursor, exclude_columns=("rowid",)
             )
 
-            # compute diff
-
-            # sync
+            compute_diff_and_sync(cursor, PREVIOUS_DB_PATH)
 
             current_datetime = datetime.now(pytz.UTC)
             brisbane_time = utc_to_brisbane_time(current_datetime)
