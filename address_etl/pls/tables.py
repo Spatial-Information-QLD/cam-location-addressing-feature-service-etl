@@ -8,6 +8,7 @@ import httpx
 from address_etl.settings import settings
 from address_etl.pls.queries import local_auth, locality, road, parcel, site, address
 from address_etl.id_map import text_to_id_for_pk
+from address_etl.tables import create_metadata_table
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,8 @@ def create_locality_tables(cursor: sqlite3.Cursor):
         """
         CREATE TABLE local_auth (
             la_code INTEGER PRIMARY KEY,
-            la_name TEXT CHECK (length(la_name) <= 40) NOT NULL
+            la_name TEXT CHECK (length(la_name) <= 40) NOT NULL,
+            hash TEXT
         )
     """
     )
@@ -46,6 +48,7 @@ def create_locality_tables(cursor: sqlite3.Cursor):
             la_code INTEGER NOT NULL,
             state TEXT CHECK (state = 'QLD') NOT NULL,
             status TEXT CHECK (length(status) = 1) NOT NULL,
+            hash TEXT,
             FOREIGN KEY (la_code) REFERENCES local_auth(la_code) ON UPDATE CASCADE
         )
     """
@@ -66,6 +69,7 @@ def create_road_tables(cursor: sqlite3.Cursor):
             road_name_type TEXT CHECK (length(road_name_type) <= 20),
             locality_code TEXT NOT NULL,
             road_cat_desc TEXT CHECK (length(road_cat_desc) = 1) NOT NULL,
+            hash TEXT,
             FOREIGN KEY (locality_code) REFERENCES locality(locality_code) ON UPDATE CASCADE
         )
     """
@@ -82,7 +86,8 @@ def create_parcel_tables(cursor: sqlite3.Cursor):
         CREATE TABLE lf_parcel (
             parcel_id TEXT PRIMARY KEY,
             plan_no TEXT CHECK (length(plan_no) <= 10),
-            lot_no TEXT CHECK (length(lot_no) <= 5)
+            lot_no TEXT CHECK (length(lot_no) <= 5),
+            hash TEXT
         )
     """
     )
@@ -100,6 +105,7 @@ def create_site_tables(cursor: sqlite3.Cursor):
             parent_site_id TEXT,
             site_type TEXT CHECK (length(site_type) <= 50) NOT NULL,
             parcel_id TEXT NOT NULL,
+            hash TEXT,
             FOREIGN KEY (parent_site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE,
             FOREIGN KEY (parcel_id) REFERENCES lf_parcel(parcel_id) ON UPDATE CASCADE
         )
@@ -115,8 +121,6 @@ def create_site_tables(cursor: sqlite3.Cursor):
 
 def create_geocode_tables(cursor: sqlite3.Cursor):
     logger.info("Creating lf_geocode_sp_survey_point table")
-    # Note: we add the site FK later. From the geocode service, we only have the address_pid.
-    # We will need to convert it from the address_pid to the site_id before adding the FK constraint.
     cursor.execute(
         """
         CREATE TABLE lf_geocode_sp_survey_point (
@@ -125,7 +129,8 @@ def create_geocode_tables(cursor: sqlite3.Cursor):
             address_pid TEXT NOT NULL,
             site_id TEXT,
             centoid_lat REAL NOT NULL,
-            centoid_lon REAL NOT NULL
+            centoid_lon REAL NOT NULL,
+            hash TEXT
         )
     """
     )
@@ -161,6 +166,7 @@ def create_address_tables(cursor: sqlite3.Cursor):
             site_id TEXT NOT NULL,
             location_desc TEXT CHECK (length(location_desc) <= 50),
             address_standard TEXT CHECK (length(address_standard) <= 10) NOT NULL,
+            hash TEXT,
             FOREIGN KEY (parcel_id) REFERENCES lf_parcel(parcel_id) ON UPDATE CASCADE,
             FOREIGN KEY (road_id) REFERENCES lf_road(road_id) ON UPDATE CASCADE,
             FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
@@ -180,6 +186,7 @@ def create_address_tables(cursor: sqlite3.Cursor):
 
 def create_tables(cursor: sqlite3.Cursor):
     cursor.execute("PRAGMA foreign_keys = ON")
+    create_metadata_table(cursor)
     create_locality_tables(cursor)
     create_road_tables(cursor)
     create_parcel_tables(cursor)
@@ -251,7 +258,7 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching road data")
-    query = road.get_query()
+    query = road.get_query(settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -285,7 +292,7 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching parcel data")
-    query = parcel.get_query()
+    query = parcel.get_query(settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -316,7 +323,7 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching site data")
-    query = site.get_query()
+    query = site.get_query(settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -345,45 +352,10 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
-def populate_geocode_tables(
-    http_client: httpx.Client, cursor: sqlite3.Cursor, pls_geocode_csv_path: str | None
-):
-    start_time = time.time()
-    logger.info("Populating geocode table")
-    if pls_geocode_csv_path:
-        logger.info(f"Reading geocode data from {pls_geocode_csv_path}")
-        with open(pls_geocode_csv_path, "r") as f:
-            reader = csv.DictReader(f)
-            for i, row in enumerate(reader):
-                try:
-                    cursor.execute(
-                        "INSERT INTO lf_geocode_sp_survey_point (geocode_id, geocode_type, address_pid, site_id, centoid_lat, centoid_lon) VALUES (?, ?, ?, ?, ?, ?)",
-                        (
-                            i,
-                            row["geocode_type"],
-                            row["address_pid"],
-                            None,
-                            row["latitude"],
-                            row["longitude"],
-                        ),
-                    )
-                except Exception as e:
-                    logger.error(f"Error inserting geocode data: {e}")
-                    logger.error(f"Row: {row}")
-                    raise e
-    else:
-        logger.info(
-            "Populating geocode table from SIRRTE not yet implemented. Skipping"
-        )
-
-    cursor.connection.commit()
-    logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
-
-
 def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Populating address table")
-    query = address.get_query()
+    query = address.get_query(settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -433,44 +405,6 @@ def update_geocode_site_id(cursor: sqlite3.Cursor):
         "UPDATE lf_geocode_sp_survey_point SET site_id = (SELECT site_id FROM lf_address WHERE lf_address.address_pid = lf_geocode_sp_survey_point.address_pid)"
     )
 
-    # Create a new table with the foreign key constraint
-    cursor.execute(
-        """
-        CREATE TABLE lf_geocode_sp_survey_point_new (
-            geocode_id TEXT PRIMARY KEY,
-            geocode_type TEXT CHECK (length(geocode_type) <= 4) NOT NULL,
-            address_pid TEXT NOT NULL,
-            site_id TEXT NOT NULL,
-            centoid_lat REAL NOT NULL,
-            centoid_lon REAL NOT NULL,
-            FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
-        )
-    """
-    )
-
-    # Copy data from old table to new table, excluding NULL site_ids
-    cursor.execute(
-        """
-        INSERT INTO lf_geocode_sp_survey_point_new 
-        SELECT * FROM lf_geocode_sp_survey_point 
-        WHERE site_id IS NOT NULL
-    """
-    )
-
-    # Drop the old table and rename the new one
-    cursor.execute("DROP TABLE lf_geocode_sp_survey_point")
-    cursor.execute(
-        "ALTER TABLE lf_geocode_sp_survey_point_new RENAME TO lf_geocode_sp_survey_point"
-    )
-
-    # Recreate the indexes
-    cursor.execute(
-        "CREATE INDEX idx_lf_geocode_sp_survey_point_address_pid ON lf_geocode_sp_survey_point (address_pid)"
-    )
-    cursor.execute(
-        "CREATE INDEX idx_lf_geocode_sp_survey_point_site_id ON lf_geocode_sp_survey_point (site_id)"
-    )
-
     cursor.connection.commit()
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
@@ -485,7 +419,6 @@ def populate_tables(cursor: sqlite3.Cursor):
         # TODO: populate lf_place_name table
         populate_address_tables(client, cursor)
 
-        populate_geocode_tables(client, cursor, settings.pls_geocode_csv_path)
         update_geocode_site_id(cursor)
 
     text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)

@@ -1,11 +1,14 @@
 from textwrap import dedent
+from jinja2 import Template
 
 
-def get_query():
-    return dedent(
-        """
+def get_query(debug: bool = False):
+    return Template(
+        dedent(
+            """
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
         PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
+        PREFIX cn: <https://linked.data.gov.au/def/cn/>
         PREFIX rnpt: <https://linked.data.gov.au/def/road-name-part-types/>
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
@@ -13,6 +16,24 @@ def get_query():
         SELECT DISTINCT (CONCAT(STR(?road), "/", ?locality_code, "/", ?road_name) AS ?road_id) ?road_name ?road_name_suffix ?road_name_type ?locality_code ?road_cat_desc
         WHERE {
             GRAPH <urn:qali:graph:addresses> {
+                {% if debug %}
+                VALUES ?parcel_id {
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/59SP217152>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/58SP217152>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/57SP217152>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217150>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217150>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/0SP217149>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217149>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217149>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
+                }
+
+                ?parcel_id a addr:AddressableObject ;
+                    cn:hasName ?iri .
+                {% endif %}
+
                 ?iri a addr:Address ;
                 sdo:hasPart [
                         sdo:additionalType apt:road ;
@@ -70,4 +91,5 @@ def get_query():
             BIND("P" as ?road_cat_desc)
         }
         """
-    )
+        )
+    ).render(debug=debug)

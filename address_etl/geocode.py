@@ -45,6 +45,28 @@ def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         )
 
 
+def insert_geocodes_pls(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
+    """Insert geocodes into the PLS database"""
+    for feature in features:
+        attrs = feature["attributes"]
+        geom = feature["geometry"]
+
+        cursor.execute(
+            """
+            INSERT INTO lf_geocode_sp_survey_point (geocode_id, geocode_type, address_pid, site_id, centoid_latitude, centoid_longitude)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """,
+            (
+                attrs["objectid"],
+                attrs["geocode_type"],
+                attrs["address_pid"],
+                None,
+                geom["y"],
+                geom["x"],
+            ),
+        )
+
+
 class GeocodeImporter:
     def __init__(
         self,
@@ -73,7 +95,7 @@ class GeocodeImporter:
             self.access_token,
         )
 
-    def import_geocodes(self) -> None:
+    def import_geocodes(self, is_pls: bool = False) -> None:
         logger.info(f"Fetching {self.geocode_count} geocodes")
         batch_size = 2000
         for offset in track(
@@ -83,7 +105,10 @@ class GeocodeImporter:
             features = self.fetch_geocodes(offset, batch_size)
             if not features:
                 logger.warning(f"No geocodes found for offset {offset}")
-            insert_geocodes(self.cursor, features)
+            if is_pls:
+                insert_geocodes_pls(self.cursor, features)
+            else:
+                insert_geocodes(self.cursor, features)
             self.cursor.connection.commit()
 
     @backoff.on_exception(
@@ -128,7 +153,7 @@ class GeocodeImporter:
             raise error
 
 
-def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = None):
+def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = None, is_pls: bool = False):
     if from_datetime:
         esri_date = datetime_to_esri_datetime_utc(from_datetime)
     else:
@@ -137,7 +162,7 @@ def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = Non
     start_time = time.time()
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         geocode_importer = GeocodeImporter(cursor, client, esri_date)
-        geocode_importer.import_geocodes()
+        geocode_importer.import_geocodes(is_pls)
 
     logger.info(
         f"Geocodes loaded successfully ({geocode_importer.geocode_count} records) in {time.time() - start_time:.2f} seconds"

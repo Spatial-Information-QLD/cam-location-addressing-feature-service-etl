@@ -1,9 +1,12 @@
 from textwrap import dedent
 
+from jinja2 import Template
 
-def get_query():
-    return dedent(
-        """
+
+def get_query(debug: bool = False):
+    return Template(
+        dedent(
+            """
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
         PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
         PREFIX cn: <https://linked.data.gov.au/def/cn/>
@@ -31,6 +34,21 @@ def get_query():
             ?location_desc
             ?address_standard
         WHERE {
+            {% if debug %}
+            VALUES ?parcel_id {
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/59SP217152>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/58SP217152>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/57SP217152>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217150>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217150>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/0SP217149>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217149>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217149>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
+            }
+            {% endif %}
+
             GRAPH <urn:qali:graph:addresses> {
                 ?parcel_id a addr:AddressableObject ;
                     cn:hasName ?addr_iri .
@@ -186,4 +204,5 @@ def get_query():
             }
         }
         """
-    )
+        )
+    ).render(debug=debug)
