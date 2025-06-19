@@ -93,6 +93,7 @@ def main():
                 cursor.connection.commit()
 
                 cursor.execute("DETACH DATABASE previous")
+                cursor.connection.commit()
 
             import_geocodes(cursor, previous_etl_start_time)
             create_table_indexes(cursor)
