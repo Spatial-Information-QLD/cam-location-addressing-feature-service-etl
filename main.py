@@ -71,16 +71,18 @@ def main():
                     settings.s3_bucket_name, previous_db, ADDRESS_PREVIOUS_DB_PATH, s3
                 )
 
+                # Attach the previous ETL's sqlite database to the connection.
+                cursor.execute(
+                    "ATTACH DATABASE ? AS previous", (ADDRESS_PREVIOUS_DB_PATH,)
+                )
+
                 # Get the previous ETL's start time from the metadata table.
-                cursor.execute("SELECT start_time FROM metadata")
+                cursor.execute("SELECT start_time FROM previous.metadata")
                 previous_etl_start_time = datetime.fromisoformat(
                     cursor.fetchone()["start_time"]
                 )
 
                 # Load the previous ETL's address_current table into the address_previous table.
-                cursor.execute(
-                    "ATTACH DATABASE ? AS previous", (ADDRESS_PREVIOUS_DB_PATH,)
-                )
                 cursor.execute(
                     "INSERT INTO address_previous SELECT * FROM previous.address_current"
                 )
@@ -96,7 +98,7 @@ def main():
             create_table_indexes(cursor)
             populate_address_current_table(cursor)
             hash_rows_in_table(
-                "address_current", cursor, exclude_columns=("rowid", "id")
+                "rowid", "id", "address_current", cursor, exclude_columns=("rowid", "id")
             )
 
             rows_deleted, rows_added = compute_table_diff(
@@ -117,8 +119,9 @@ def main():
             # The addresses that need to be inserted are the union of rows_added and rows_deleted.
             if rows_deleted:
                 delete_records_from_esri(
-                    where_clause=f"address_pid IN ({','.join(rows_deleted)})",
-                    esri_url=settings.esri_location_addressing_rest_api_apply_edit_url,
+                    where_clause=f"address_pid IN ({','.join([str(row) for row in rows_deleted])})",
+                    esri_url=settings.esri_location_addressing_rest_api_query_url,
+                    esri_apply_edits_url=settings.esri_location_addressing_rest_api_apply_edit_url,
                 )
             if rows_union := rows_added | rows_deleted:
                 insert_addresses_into_esri(

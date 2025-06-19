@@ -24,6 +24,7 @@ def create_row_hash(row: dict, exclude_columns: Sequence[str]) -> str:
 
 
 def hash_rows_in_table(
+    pk_column_name: str,
     hash_column_name: str,
     table_name: str,
     cursor: sqlite3.Cursor,
@@ -42,8 +43,8 @@ def hash_rows_in_table(
         for row in cursor.execute(f"SELECT rowid, * FROM {table_name}"):
             row_hash = create_row_hash(row, exclude_columns)
             update_cursor.execute(
-                f"UPDATE {table_name} SET {hash_column_name} = ? WHERE rowid = ?",
-                (row_hash, row["rowid"]),
+                f"UPDATE {table_name} SET {hash_column_name} = ? WHERE {pk_column_name} = ?",
+                (row_hash, row[pk_column_name]),
             )
     finally:
         cursor.connection.commit()

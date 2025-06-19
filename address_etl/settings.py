@@ -29,8 +29,7 @@ class Settings(BaseSettings):
     populate_geocode_table: bool = True
     http_retry_max_time_in_seconds: int = 3600
     http_timeout_in_seconds: int = 600
-    address_iri_limit: int | None = None
-    pls_geocode_csv_path: str | None = None
+    debug: bool = False
 
     # pytz
     timezone: str = "Australia/Brisbane"

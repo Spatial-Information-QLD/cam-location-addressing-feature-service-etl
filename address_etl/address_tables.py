@@ -242,7 +242,7 @@ def populate_address_current_staging_table(
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         logger.info("Retrieving address IRIs from SPARQL endpoint")
         address_iris = get_address_iris(
-            sparql_endpoint, client, settings.address_iri_limit
+            sparql_endpoint, client, 10 if settings.debug else None
         )
         logger.info(f"Retrieved {len(address_iris)} address IRIs to process")
 

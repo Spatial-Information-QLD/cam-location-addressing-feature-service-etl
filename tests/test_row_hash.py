@@ -23,7 +23,7 @@ def test_hash_rows_in_table():
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE test (id TEXT, a INTEGER, b INTEGER, c INTEGER)")
     cursor.execute("INSERT INTO test (a, b, c) VALUES (1, 2, 3)")
-    hash_rows_in_table("id", "test", cursor, exclude_columns=("rowid", "id"))
+    hash_rows_in_table("rowid", "id", "test", cursor, exclude_columns=("rowid", "id"))
     assert (
         cursor.execute("SELECT id FROM test").fetchone()["id"]
         == "a80482d74631d666f097f2da3bccc534"

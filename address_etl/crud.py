@@ -12,7 +12,7 @@ from address_etl.settings import settings
 logger = logging.getLogger(__name__)
 
 
-def delete_records_from_esri(where_clause: str, esri_url: str):
+def delete_records_from_esri(where_clause: str, esri_url: str, esri_apply_edits_url: str):
     start_time = time.time()
     batch_size = 2000
 
@@ -73,7 +73,7 @@ def delete_records_from_esri(where_clause: str, esri_url: str):
                 "f": "json",
                 "token": access_token,
             }
-            response = client.post(esri_url, data=params)
+            response = client.post(esri_apply_edits_url, data=params)
 
             try:
                 response.raise_for_status()
