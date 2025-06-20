@@ -10,6 +10,8 @@ class Settings(BaseSettings):
 
     sqlite_conn_str: str = "address.db"
     pls_sqlite_conn_str: str = "pls.db"
+
+    # Location Addressing
     esri_location_addressing_rest_api_query_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_Maintenance_UAT/FeatureServer/0/query"
     )
@@ -17,6 +19,7 @@ class Settings(BaseSettings):
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_Maintenance_UAT/FeatureServer/0/applyEdits"
     )
 
+    # Geocodes
     esri_geocode_rest_api_query_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes_UAT/FeatureServer/0/query"
     )
@@ -24,6 +27,7 @@ class Settings(BaseSettings):
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes_UAT/FeatureServer/0/applyEdits"
     )
 
+    # PLS local_auth
     esri_pls_local_auth_api_query_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/7/query"
     )
@@ -31,10 +35,52 @@ class Settings(BaseSettings):
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/7/applyEdits"
     )
 
+    # PLS locality
+    esri_pls_locality_api_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/8/query"
+    )
+    esri_pls_locality_api_apply_edit_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/8/applyEdits"
+    )
+
+    # PLS road
+    esri_pls_road_api_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/5/query"
+    )
+    esri_pls_road_api_apply_edit_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/5/applyEdits"
+    )
+
+    # PLS parcel
+    esri_pls_parcel_api_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/3/query"
+    )
+    esri_pls_parcel_api_apply_edit_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/3/applyEdits"
+    )
+
+    # PLS site
+    esri_pls_site_api_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/6/query"
+    )
+    esri_pls_site_api_apply_edit_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/6/applyEdits"
+    )
+
+    # PLS address
+    esri_pls_address_api_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/0/query"
+    )
+    esri_pls_address_api_apply_edit_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/0/applyEdits"
+    )
+
+    # Auth
     esri_auth_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/sharing/rest/generateToken"
     )
     esri_referer: str = "https://qportal.information.qld.gov.au/arcgis/"
+
     populate_geocode_table: bool = True
     http_retry_max_time_in_seconds: int = 3600
     http_timeout_in_seconds: int = 600

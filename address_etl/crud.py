@@ -51,7 +51,7 @@ def delete_records_from_esri(where_clause: str, esri_url: str, esri_apply_edits_
                 "resultRecordCount": batch_size,
                 "token": access_token,
             }
-            response = client.get(esri_url, params=params)
+            response = client.post(esri_url, data=params)
 
             try:
                 response.raise_for_status()

@@ -64,7 +64,7 @@ def get_count(
     }
     params["token"] = access_token
 
-    response = client.get(esri_url, params=params)
+    response = client.post(esri_url, data=params)
     try:
         response.raise_for_status()
         return int(response.json()["count"])
