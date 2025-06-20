@@ -1,7 +1,13 @@
 import sqlite3
 
 
-def get_deleted_rows(hash_column_name: str, id_column_name: str, table_previous: str, table_current: str, cursor: sqlite3.Cursor):
+def get_deleted_rows(
+    hash_column_name: str,
+    id_column_name: str,
+    table_previous: str,
+    table_current: str,
+    cursor: sqlite3.Cursor,
+) -> set[str]:
     cursor.execute(
         f"""
         SELECT DISTINCT p.{id_column_name}
@@ -11,10 +17,16 @@ def get_deleted_rows(hash_column_name: str, id_column_name: str, table_previous:
         """
     )
     rows_deleted = cursor.fetchall()
-    return set([row[id_column_name] for row in rows_deleted])
+    return set([str(row[id_column_name]) for row in rows_deleted])
 
 
-def get_added_rows(hash_column_name: str, id_column_name: str, table_previous: str, table_current: str, cursor: sqlite3.Cursor):
+def get_added_rows(
+    hash_column_name: str,
+    id_column_name: str,
+    table_previous: str,
+    table_current: str,
+    cursor: sqlite3.Cursor,
+) -> set[str]:
     cursor.execute(
         f"""
         SELECT DISTINCT c.{id_column_name}
@@ -24,7 +36,7 @@ def get_added_rows(hash_column_name: str, id_column_name: str, table_previous: s
         """
     )
     rows_added = cursor.fetchall()
-    return set([row[id_column_name] for row in rows_added])
+    return set([str(row[id_column_name]) for row in rows_added])
 
 
 def compute_table_diff(
@@ -39,6 +51,10 @@ def compute_table_diff(
 
     See hash_rows_in_table function to create a hash of each row in a table.
     """
-    rows_deleted = get_deleted_rows(hash_column_name, id_column_name, table_previous, table_current, cursor)
-    rows_added = get_added_rows(hash_column_name, id_column_name, table_previous, table_current, cursor)
+    rows_deleted = get_deleted_rows(
+        hash_column_name, id_column_name, table_previous, table_current, cursor
+    )
+    rows_added = get_added_rows(
+        hash_column_name, id_column_name, table_previous, table_current, cursor
+    )
     return rows_deleted, rows_added
