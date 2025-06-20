@@ -465,6 +465,44 @@ def update_geocode_site_id(cursor: sqlite3.Cursor):
         "UPDATE lf_geocode_sp_survey_point SET site_id = (SELECT site_id FROM lf_address WHERE lf_address.address_pid = lf_geocode_sp_survey_point.address_pid)"
     )
 
+    # Create a new table with the foreign key constraint
+    cursor.execute(
+        """
+        CREATE TABLE lf_geocode_sp_survey_point_new (
+            geocode_id TEXT PRIMARY KEY,
+            geocode_type TEXT CHECK (length(geocode_type) <= 4) NOT NULL,
+            address_pid TEXT NOT NULL,
+            site_id TEXT,
+            centoid_lat REAL NOT NULL,
+            centoid_lon REAL NOT NULL,
+            hash TEXT,
+            FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
+        )
+    """
+    )
+
+    # Copy data from old table to new table, excluding NULL site_ids
+    cursor.execute(
+        """
+        INSERT INTO lf_geocode_sp_survey_point_new 
+        SELECT * FROM lf_geocode_sp_survey_point
+    """
+    )
+
+    # Drop the old table and rename the new one
+    cursor.execute("DROP TABLE lf_geocode_sp_survey_point")
+    cursor.execute(
+        "ALTER TABLE lf_geocode_sp_survey_point_new RENAME TO lf_geocode_sp_survey_point"
+    )
+
+    # Recreate the indexes
+    cursor.execute(
+        "CREATE INDEX idx_lf_geocode_sp_survey_point_address_pid ON lf_geocode_sp_survey_point (address_pid)"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_lf_geocode_sp_survey_point_site_id ON lf_geocode_sp_survey_point (site_id)"
+    )
+
     cursor.connection.commit()
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 

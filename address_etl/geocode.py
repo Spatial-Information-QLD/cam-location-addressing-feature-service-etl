@@ -71,19 +71,39 @@ def insert_geocodes_pls(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         geom = feature["geometry"]
 
         cursor.execute(
-            """
-            INSERT INTO lf_geocode_sp_survey_point (geocode_id, geocode_type, address_pid, site_id, centoid_latitude, centoid_longitude)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """,
-            (
-                attrs["objectid"],
-                attrs["geocode_type"],
-                attrs["address_pid"],
-                None,
-                geom["y"],
-                geom["x"],
-            ),
+            "SELECT * FROM lf_geocode_sp_survey_point WHERE geocode_id = ?",
+            (attrs["objectid"],),
         )
+
+        if cursor.fetchone():
+            cursor.execute(
+                """
+                UPDATE lf_geocode_sp_survey_point SET geocode_type = ?, address_pid = ?, site_id = ?, centoid_latitude = ?, centoid_longitude = ? WHERE geocode_id = ?
+                """,
+                (
+                    attrs["geocode_type"],
+                    attrs["address_pid"],
+                    None,
+                    geom["y"],
+                    geom["x"],
+                    attrs["objectid"],
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO lf_geocode_sp_survey_point (geocode_id, geocode_type, address_pid, site_id, centoid_latitude, centoid_longitude)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    attrs["objectid"],
+                    attrs["geocode_type"],
+                    attrs["address_pid"],
+                    None,
+                    geom["y"],
+                    geom["x"],
+                ),
+            )
 
 
 class GeocodeImporter:

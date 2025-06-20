@@ -143,6 +143,13 @@ def main():
             hash_rows_in_table(
                 "locality_code", "hash", "locality", cursor, exclude_columns=("rowid",)
             )
+            hash_rows_in_table(
+                "geocode_id",
+                "hash",
+                "lf_geocode_sp_survey_point",
+                cursor,
+                exclude_columns=("rowid",),
+            )
 
             compute_diff_and_sync(cursor, PREVIOUS_DB_PATH)
 

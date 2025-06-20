@@ -75,6 +75,14 @@ class Settings(BaseSettings):
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/0/applyEdits"
     )
 
+    # PLS geocode
+    esri_pls_geocode_api_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/1/query"
+    )
+    esri_pls_geocode_api_apply_edit_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/1/applyEdits"
+    )
+
     # Auth
     esri_auth_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/sharing/rest/generateToken"
