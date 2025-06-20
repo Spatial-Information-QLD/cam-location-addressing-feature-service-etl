@@ -235,7 +235,7 @@ def get_address_rows(
                 OPTIONAL {
                     GRAPH <urn:qali:graph:geographical-names> {
                         ?locality_object sdo:additionalProperty [
-                            sdo:propertyID "local_authority" ;
+                            sdo:propertyID "pndb.lga_name" ;
                             sdo:value ?local_authority
                         ] .
                     }
@@ -245,7 +245,7 @@ def get_address_rows(
                 ?iri addr:hasStatus ?address_status_concept .
                 GRAPH ?address_status_vocab_graph {
                     ?address_status_concept skos:notation ?address_status ;
-                                            skos:inScheme <https://linked.data.gov.au/def/address-status-type> .
+                                            skos:inScheme <https://linked.data.gov.au/def/addr-status-type> .
                     FILTER(DATATYPE(?address_status) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
                 }
                 
@@ -253,7 +253,7 @@ def get_address_rows(
                 ?iri sdo:additionalType ?address_standard_concept .
                 GRAPH ?address_standard_vocab_graph {
                     ?address_standard_concept skos:notation ?address_standard ;
-                                            skos:inScheme <https://linked.data.gov.au/def/address-classes> .
+                                            skos:inScheme <https://linked.data.gov.au/def/addr-classes> .
                     FILTER(DATATYPE(?address_standard) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
                 }
                 

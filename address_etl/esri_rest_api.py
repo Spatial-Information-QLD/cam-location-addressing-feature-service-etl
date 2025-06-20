@@ -43,7 +43,34 @@ def get_total_count(
     response = client.get(esri_url, params=params)
     try:
         response.raise_for_status()
+        return int(response.json()["count"])
     except Exception as e:
         logger.error(f"Error getting total count: {response.text}")
         raise e
-    return response.json()["count"]
+
+
+def get_count(
+    where_clause: str,
+    esri_url: str,
+    client: httpx.Client,
+    access_token: str,
+    params: dict | None = None,
+) -> int:
+    """Get the number of records from the service that match the where clause"""
+    params = params or {
+        "where": where_clause,
+        "returnCountOnly": "true",
+        "f": "json",
+    }
+    params["token"] = access_token
+
+    response = client.post(esri_url, data=params)
+    try:
+        response.raise_for_status()
+        return int(response.json()["count"])
+    except Exception as e:
+        logger.error(
+            f"Error getting records count ({response.status_code}): {response.text[:1000]}"
+        )
+        logger.info(f"Where clause: {where_clause[:500]}")
+        raise e

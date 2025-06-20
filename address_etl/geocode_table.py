@@ -7,7 +7,7 @@ import backoff
 import httpx
 from rich.progress import track
 
-from address_etl.esri_rest_api import get_esri_token, get_total_count
+from address_etl.esri_rest_api import get_esri_token
 from address_etl.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,26 @@ def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         )
 
 
+def get_geocode_count(
+    esri_url: str, client: httpx.Client, access_token: str, params: dict | None = None
+) -> int:
+    """Get the total number of geocodes from the service"""
+    params = params or {
+        "where": "LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%' AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'",
+        "returnCountOnly": "true",
+        "f": "json",
+    }
+    params["token"] = access_token
+
+    response = client.get(esri_url, params=params)
+    try:
+        response.raise_for_status()
+        return int(response.json()["count"])
+    except Exception as e:
+        logger.error(f"Error getting total count: {response.text}")
+        raise e
+
+
 class GeocodeTablePopulator:
     """
     Populate the geocode table with data from the Esri feature service.
@@ -58,18 +78,20 @@ class GeocodeTablePopulator:
             client,
         )
 
-        self.total_count = get_total_count(
+        self.total_count = get_geocode_count(
             settings.esri_geocode_rest_api_query_url, client, self.access_token
         )
 
     def populate(self):
         logger.info(f"Total records to process: {self.total_count}")
-        batch_size = 10_000
+        batch_size = 2000
         for offset in track(
             range(0, self.total_count, batch_size),
             description="Processing geocodes",
         ):
             features = self.fetch_geocodes(offset, batch_size)
+            if not features:
+                logger.warning(f"No geocodes found for offset {offset}")
             insert_geocodes(self.cursor, features)
             self.cursor.connection.commit()
 
@@ -79,12 +101,10 @@ class GeocodeTablePopulator:
         max_time=settings.http_retry_max_time_in_seconds,
         on_backoff=on_backoff_handler,
     )
-    def fetch_geocodes(
-        self, offset: int, batch_size: int = 10000
-    ) -> list[dict[str, Any]]:
+    def fetch_geocodes(self, offset: int, batch_size: int) -> list[dict[str, Any]]:
         """Fetch a batch of geocodes from the service"""
         params = {
-            "where": "1=1",
+            "where": "LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%' AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'",
             "outFields": "geocode_type,address_pid",
             "returnGeometry": "true",
             "resultOffset": offset,
@@ -142,7 +162,7 @@ def fetch_geocodes_in_debug_mode(cursor: sqlite3.Cursor, client: httpx.Client):
 
     # Fetch the geocodes for the address_pid values
     params = {
-        "where": f"address_pid IN ({', '.join(address_pids)})",
+        "where": f"geocode_source = 'LALF' AND address_pid IN ({', '.join(address_pids)})",
         "outFields": "geocode_type,address_pid",
         "returnGeometry": "true",
         "f": "json",

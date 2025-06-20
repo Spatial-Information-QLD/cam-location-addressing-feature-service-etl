@@ -13,12 +13,25 @@ def address_iris_query(limit: int | None = None):
             dedent(
                 """
                 PREFIX addr: <https://linked.data.gov.au/def/addr/>
-                SELECT ?iri
+                PREFIX lc: <https://linked.data.gov.au/def/lifecycle/>
+                PREFIX sdo: <https://schema.org/>
+                PREFIX time: <http://www.w3.org/2006/time#>
+
+                SELECT ?iri (MAX(?_start_time) AS ?start_time)
                 WHERE {
                     GRAPH <urn:qali:graph:addresses> {
-                        ?iri a addr:Address
+                        ?iri a addr:Address ;
+                            lc:hasLifecycleStage ?lifecycle_stage .
+
+                        ?lifecycle_stage sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> ;
+                            time:hasBeginning/time:inXSDDateTime ?_start_time
+
+                        FILTER NOT EXISTS {
+                            ?lifecycle_stage time:hasEnd ?end_time
+                        }
                     }
                 }
+                GROUP BY ?iri
                 {% if limit %}
                 LIMIT {{ limit }}
                 {% endif %}

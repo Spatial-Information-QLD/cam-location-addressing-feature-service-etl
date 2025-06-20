@@ -1,7 +1,5 @@
 """
-Deletes LALF geocodes from SIRRTE.
-
-Deletes geocodes in batches until no geocodes are left.
+Deletes addresses from SIRRTE
 """
 
 import logging
@@ -43,25 +41,25 @@ if __name__ == "__main__":
                 logger.info("ESRI token obtained")
                 token_use = 10
 
-            # Get geocodes count
+            # Get addresses
             total_count = get_total_count(
-                settings.esri_geocode_rest_api_query_url,
+                settings.esri_location_addressing_rest_api_query_url,
                 client,
                 access_token,
                 params={
-                    "where": "geocode_source = 'LALF'",
+                    "where": "1=1",
                     "f": "json",
                     "returnCountOnly": "true",
                 },
             )
 
-            logger.info(f"Total geocodes with source as LALF: {total_count}")
+            logger.info(f"Total addresses: {total_count}")
             if total_count == 0:
                 break
 
-            # Retrieve geocode objectids
+            # Retrieve addresses
             params = {
-                "where": "geocode_source = 'LALF'",
+                "where": "1=1",
                 "outFields": "objectid",
                 "returnGeometry": "false",
                 "f": "json",
@@ -70,44 +68,44 @@ if __name__ == "__main__":
                 "token": access_token,
             }
             response = client.get(
-                settings.esri_geocode_rest_api_query_url, params=params
+                settings.esri_location_addressing_rest_api_query_url, params=params
             )
-            
+
             try:
                 response.raise_for_status()
             except Exception as e:
-                logger.error(f"Error getting geocodes: {response.text}")
+                logger.error(f"Error getting addresses: {response.text}")
                 raise e
 
             if "error" in response.text:
-                logger.error(f"Error getting geocodes: {response.text}")
-                raise Exception(f"Error getting geocodes: {response.text}")
+                logger.error(f"Error getting addresses: {response.text}")
+                raise Exception(f"Error getting addresses: {response.text}")
 
             data = response.json()
             features = data["features"]
             objectids = [feature["attributes"]["objectid"] for feature in features]
 
-            # Delete geocodes
+            # Delete addresses
             params = {
                 "deletes": json.dumps(objectids),
                 "f": "json",
                 "token": access_token,
             }
             response = client.post(
-                settings.esri_geocode_rest_api_apply_edit_url, data=params
+                settings.esri_location_addressing_rest_api_apply_edit_url, data=params
             )
-            
+
             try:
                 response.raise_for_status()
             except Exception as e:
-                logger.error(f"Error deleting geocodes: {response.text}")
+                logger.error(f"Error deleting addresses: {response.text}")
                 raise e
 
             if "error" in response.text:
-                logger.error(f"Error deleting geocodes: {response.text}")
-                raise Exception(f"Error deleting geocodes: {response.text}")
+                logger.error(f"Error deleting addresses: {response.text}")
+                raise Exception(f"Error deleting addresses: {response.text}")
 
-            logger.info(f"Deleted {len(objectids)} geocodes")
+            logger.info(f"Deleted {len(objectids)} addresses")
 
             token_use -= 1
 
