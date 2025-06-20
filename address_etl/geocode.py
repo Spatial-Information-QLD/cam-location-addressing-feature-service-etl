@@ -25,24 +25,43 @@ def on_backoff_handler(details):
 
 
 def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
-    """Insert geocodes into the database"""
+    """Insert geocodes into the database or update existing rows"""
     for feature in features:
         attrs = feature["attributes"]
         geom = feature["geometry"]
 
         cursor.execute(
-            """
-            INSERT INTO geocode (geocode_id, geocode_type, address_pid, longitude, latitude)
-            VALUES (?, ?, ?, ?, ?)
-        """,
-            (
-                attrs["objectid"],
-                attrs["geocode_type"],
-                attrs["address_pid"],
-                geom["x"],
-                geom["y"],
-            ),
+            "SELECT * FROM geocode WHERE geocode_id = ?",
+            (attrs["objectid"],),
         )
+
+        if cursor.fetchone():
+            cursor.execute(
+                """
+                UPDATE geocode SET geocode_type = ?, address_pid = ?, longitude = ?, latitude = ? WHERE geocode_id = ?
+                """,
+                (
+                    attrs["geocode_type"],
+                    attrs["address_pid"],
+                    geom["x"],
+                    geom["y"],
+                    attrs["objectid"],
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO geocode (geocode_id, geocode_type, address_pid, longitude, latitude)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                (
+                    attrs["objectid"],
+                    attrs["geocode_type"],
+                    attrs["address_pid"],
+                    geom["x"],
+                    geom["y"],
+                ),
+            )
 
 
 def insert_geocodes_pls(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
@@ -153,7 +172,9 @@ class GeocodeImporter:
             raise error
 
 
-def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = None, is_pls: bool = False):
+def import_geocodes(
+    cursor: sqlite3.Cursor, from_datetime: datetime | None = None, is_pls: bool = False
+):
     if from_datetime:
         esri_date = datetime_to_esri_datetime_utc(from_datetime)
     else:
