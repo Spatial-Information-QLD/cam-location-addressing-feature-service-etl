@@ -99,7 +99,11 @@ def main():
             create_table_indexes(cursor)
             populate_address_current_table(cursor)
             hash_rows_in_table(
-                "rowid", "id", "address_current", cursor, exclude_columns=("rowid", "id")
+                "rowid",
+                "id",
+                "address_current",
+                cursor,
+                exclude_columns=("rowid", "id"),
             )
 
             rows_deleted, rows_added = compute_table_diff(
@@ -120,11 +124,13 @@ def main():
             # The addresses that need to be inserted are the union of rows_added and rows_deleted.
             if rows_deleted:
                 delete_records_from_esri(
-                    where_clause=f"address_pid IN ({','.join([str(row) for row in rows_deleted])})",
+                    where_clause=f"address_pid IN ({','.join(rows_deleted)})",
                     esri_url=settings.esri_location_addressing_rest_api_query_url,
                     esri_apply_edits_url=settings.esri_location_addressing_rest_api_apply_edit_url,
                 )
-            if rows_union := rows_added | rows_deleted:
+
+            if rows_added:
+                rows_union = rows_added | rows_deleted
                 insert_addresses_into_esri(
                     rows_union,
                     settings.esri_location_addressing_rest_api_apply_edit_url,
