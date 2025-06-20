@@ -106,7 +106,9 @@ def _local_auth_diff_and_sync(cursor: sqlite3.Cursor):
 
     if rows_deleted:
         delete_records_from_esri(
-            where_clause=f"la_code IN ({','.join([str(row) for row in rows_deleted])})",
+            column_name="la_code",
+            identifiers=list(rows_deleted),
+            id_type=int,
             esri_url=settings.esri_pls_local_auth_api_query_url,
             esri_apply_edits_url=settings.esri_pls_local_auth_api_apply_edit_url,
         )
@@ -131,7 +133,9 @@ def _locality_diff_and_sync(cursor: sqlite3.Cursor):
 
     if rows_deleted:
         delete_records_from_esri(
-            where_clause=f"locality_code IN ({','.join([f'\'{row}\'' for row in rows_deleted])})",
+            column_name="locality_code",
+            identifiers=list(rows_deleted),
+            id_type=str,
             esri_url=settings.esri_pls_locality_api_query_url,
             esri_apply_edits_url=settings.esri_pls_locality_api_apply_edit_url,
         )
@@ -156,7 +160,9 @@ def _road_diff_and_sync(cursor: sqlite3.Cursor):
 
     if rows_deleted:
         delete_records_from_esri(
-            where_clause=f"road_id IN ({','.join([str(row) for row in rows_deleted])})",
+            column_name="road_id",
+            identifiers=list(rows_deleted),
+            id_type=int,
             esri_url=settings.esri_pls_road_api_query_url,
             esri_apply_edits_url=settings.esri_pls_road_api_apply_edit_url,
         )
@@ -181,7 +187,9 @@ def _parcel_diff_and_sync(cursor: sqlite3.Cursor):
 
     if rows_deleted:
         delete_records_from_esri(
-            where_clause=f"parcel_id IN ({','.join([str(row) for row in rows_deleted])})",
+            column_name="parcel_id",
+            identifiers=list(rows_deleted),
+            id_type=int,
             esri_url=settings.esri_pls_parcel_api_query_url,
             esri_apply_edits_url=settings.esri_pls_parcel_api_apply_edit_url,
         )
@@ -206,7 +214,9 @@ def _site_diff_and_sync(cursor: sqlite3.Cursor):
 
     if rows_deleted:
         delete_records_from_esri(
-            where_clause=f"site_id IN ({','.join([str(row) for row in rows_deleted])})",
+            column_name="site_id",
+            identifiers=list(rows_deleted),
+            id_type=int,
             esri_url=settings.esri_pls_site_api_query_url,
             esri_apply_edits_url=settings.esri_pls_site_api_apply_edit_url,
         )
@@ -231,7 +241,9 @@ def _address_diff_and_sync(cursor: sqlite3.Cursor):
 
     if rows_deleted:
         delete_records_from_esri(
-            where_clause=f"addr_id IN ({','.join([str(row) for row in rows_deleted])})",
+            column_name="addr_id",
+            identifiers=list(rows_deleted),
+            id_type=int,
             esri_url=settings.esri_pls_address_api_query_url,
             esri_apply_edits_url=settings.esri_pls_address_api_apply_edit_url,
         )
@@ -248,6 +260,37 @@ def _address_diff_and_sync(cursor: sqlite3.Cursor):
         )
 
 
+def _geocode_diff_and_sync(cursor: sqlite3.Cursor):
+    rows_deleted, rows_added = compute_table_diff(
+        "hash",
+        "geocode_id",
+        "previous.lf_geocode_sp_survey_point",
+        "lf_geocode_sp_survey_point",
+        cursor,
+    )
+    _log_diff("lf_geocode_sp_survey_point", rows_deleted, rows_added)
+
+    if rows_deleted:
+        delete_records_from_esri(
+            column_name="geocode_id",
+            identifiers=list(rows_deleted),
+            id_type=int,
+            esri_url=settings.esri_pls_geocode_api_query_url,
+            esri_apply_edits_url=settings.esri_pls_geocode_api_apply_edit_url,
+        )
+
+    if rows_added:
+        rows_union = rows_added | rows_deleted
+        _insert_into_esri(
+            "lf_geocode_sp_survey_point",
+            "geocode_id",
+            "SELECT geocode_id, geocode_type, site_id, centoid_lat, centoid_lon FROM lf_geocode_sp_survey_point WHERE geocode_id IN ({})",
+            settings.esri_pls_geocode_api_apply_edit_url,
+            rows_union,
+            cursor,
+        )
+
+
 def compute_diff_and_sync(cursor: sqlite3.Cursor, previous_db_path: str):
     # Attach the previous ETL's database.
     cursor.execute("ATTACH DATABASE ? AS previous", (previous_db_path,))
@@ -258,6 +301,7 @@ def compute_diff_and_sync(cursor: sqlite3.Cursor, previous_db_path: str):
     _parcel_diff_and_sync(cursor)
     _site_diff_and_sync(cursor)
     _address_diff_and_sync(cursor)
+    # _geocode_diff_and_sync(cursor)
 
     cursor.execute("DETACH DATABASE previous")
     cursor.connection.commit()

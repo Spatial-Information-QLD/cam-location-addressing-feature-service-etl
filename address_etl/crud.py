@@ -6,19 +6,30 @@ from typing import Sequence
 
 import httpx
 
-from address_etl.esri_rest_api import get_esri_token, get_count
+from address_etl.esri_rest_api import get_esri_token
 from address_etl.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
-def delete_records_from_esri(where_clause: str, esri_url: str, esri_apply_edits_url: str):
+def delete_records_from_esri(
+    column_name: str,
+    identifiers: list,
+    id_type: type,
+    esri_url: str,
+    esri_apply_edits_url: str,
+):
     start_time = time.time()
     batch_size = 2000
 
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         token_use = 0
-        while True:
+        total_deleted = 0
+
+        # Process identifiers in batches
+        for i in range(0, len(identifiers), batch_size):
+            batch_identifiers = identifiers[i : i + batch_size]
+
             if token_use == 0:
                 logger.info("Getting ESRI token")
                 access_token = get_esri_token(
@@ -31,17 +42,18 @@ def delete_records_from_esri(where_clause: str, esri_url: str, esri_apply_edits_
                 logger.info("ESRI token obtained")
                 token_use = 10
 
-            # Get count of records to delete
-            count = get_count(
-                where_clause=where_clause,
-                esri_url=esri_url,
-                client=client,
-                access_token=access_token,
-            )
-            if count == 0:
-                break
+            # Build where clause for this batch
+            if id_type == str:
+                placeholders = ",".join(
+                    "'" + identifier + "'" for identifier in batch_identifiers
+                )
+            else:
+                placeholders = ",".join(
+                    str(identifier) for identifier in batch_identifiers
+                )
+            where_clause = f"{column_name} IN ({placeholders})"
 
-            # Get objectids of records to delete
+            # Get objectids of records to delete for this batch
             params = {
                 "where": where_clause,
                 "outFields": "objectid",
@@ -65,6 +77,11 @@ def delete_records_from_esri(where_clause: str, esri_url: str, esri_apply_edits_
 
             data = response.json()
             features = data["features"]
+
+            if not features:
+                logger.info(f"No records found for batch {i//batch_size + 1}")
+                continue
+
             objectids = [feature["attributes"]["objectid"] for feature in features]
 
             # Delete records
@@ -85,10 +102,14 @@ def delete_records_from_esri(where_clause: str, esri_url: str, esri_apply_edits_
                 logger.error(f"Error deleting records: {response.text}")
                 raise Exception(f"Error deleting records: {response.text}")
 
-            logger.info(f"Deleted {len(objectids)} records")
+            total_deleted += len(objectids)
+            logger.info(
+                f"Deleted {len(objectids)} records from batch {i//batch_size + 1}"
+            )
 
             token_use -= 1
 
+    logger.info(f"Total records deleted: {total_deleted}")
     logger.info(f"Total time taken: {time.time() - start_time:.2f} seconds")
 
 
