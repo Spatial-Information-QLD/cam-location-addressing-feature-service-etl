@@ -46,6 +46,7 @@ def get_query(debug: bool = False):
                 <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217149>
                 <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
                 <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/235RP33643>
             }
             {% endif %}
 
