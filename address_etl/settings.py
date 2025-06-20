@@ -16,12 +16,21 @@ class Settings(BaseSettings):
     esri_location_addressing_rest_api_apply_edit_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Queensland_Location_Address_Maintenance_UAT/FeatureServer/0/applyEdits"
     )
+
     esri_geocode_rest_api_query_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes_UAT/FeatureServer/0/query"
     )
     esri_geocode_rest_api_apply_edit_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes_UAT/FeatureServer/0/applyEdits"
     )
+
+    esri_pls_local_auth_api_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/7/query"
+    )
+    esri_pls_local_auth_api_apply_edit_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/PLI_Tables_UAT/FeatureServer/7/applyEdits"
+    )
+
     esri_auth_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/sharing/rest/generateToken"
     )

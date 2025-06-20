@@ -38,6 +38,16 @@ def create_locality_tables(cursor: sqlite3.Cursor):
     """
     )
 
+    logger.info("Creating local_auth_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE local_auth_loaded (
+            la_code INTEGER,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+        """
+    )
+
     logger.info("Creating locality table")
     cursor.execute(
         """
@@ -52,6 +62,16 @@ def create_locality_tables(cursor: sqlite3.Cursor):
             FOREIGN KEY (la_code) REFERENCES local_auth(la_code) ON UPDATE CASCADE
         )
     """
+    )
+
+    logger.info("Creating locality_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE locality_loaded (
+            locality_code TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+        """
     )
 
     cursor.execute("CREATE INDEX idx_locality_la_code ON locality (la_code)")
@@ -75,6 +95,16 @@ def create_road_tables(cursor: sqlite3.Cursor):
     """
     )
 
+    logger.info("Creating lf_road_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE lf_road_loaded (
+            road_id TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+    """
+    )
+
     create_id_map_table("lf_road_id_map", cursor)
     cursor.execute("CREATE INDEX idx_lf_road_locality_code ON lf_road (locality_code)")
 
@@ -90,6 +120,16 @@ def create_parcel_tables(cursor: sqlite3.Cursor):
             hash TEXT
         )
     """
+    )
+
+    logger.info("Creating lf_parcel_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE lf_parcel_loaded (
+            parcel_id TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+        """
     )
 
     create_id_map_table("lf_parcel_id_map", cursor)
@@ -110,6 +150,16 @@ def create_site_tables(cursor: sqlite3.Cursor):
             FOREIGN KEY (parcel_id) REFERENCES lf_parcel(parcel_id) ON UPDATE CASCADE
         )
     """
+    )
+
+    logger.info("Creating lf_site_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE lf_site_loaded (
+            site_id TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+        """
     )
 
     create_id_map_table("lf_site_id_map", cursor)
@@ -172,6 +222,16 @@ def create_address_tables(cursor: sqlite3.Cursor):
             FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
         )
     """
+    )
+
+    logger.info("Creating lf_address_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE lf_address_loaded (
+            addr_id TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+        """
     )
 
     cursor.execute(
