@@ -124,7 +124,9 @@ def main():
             # The addresses that need to be inserted are the union of rows_added and rows_deleted.
             if rows_deleted:
                 delete_records_from_esri(
-                    where_clause=f"address_pid IN ({','.join(rows_deleted)})",
+                    column_name="address_pid",
+                    identifiers=list(rows_deleted),
+                    id_type=int,
                     esri_url=settings.esri_location_addressing_rest_api_query_url,
                     esri_apply_edits_url=settings.esri_location_addressing_rest_api_apply_edit_url,
                 )
