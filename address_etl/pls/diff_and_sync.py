@@ -301,7 +301,7 @@ def compute_diff_and_sync(cursor: sqlite3.Cursor, previous_db_path: str):
     _parcel_diff_and_sync(cursor)
     _site_diff_and_sync(cursor)
     _address_diff_and_sync(cursor)
-    # _geocode_diff_and_sync(cursor)
+    _geocode_diff_and_sync(cursor)
 
     cursor.execute("DETACH DATABASE previous")
     cursor.connection.commit()
