@@ -29,6 +29,9 @@ def get_query(debug: bool = False):
                     <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
                     <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
                     <https://linked.data.gov.au/dataset/qld-addr/parcel/235RP33643>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP101578>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/2RP141728>
+                    <https://linked.data.gov.au/dataset/qld-addr/parcel/41SP317569>
                 }
 
                 ?parcel_id a addr:AddressableObject ;

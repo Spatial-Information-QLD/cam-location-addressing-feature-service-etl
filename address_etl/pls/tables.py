@@ -6,7 +6,15 @@ import time
 import httpx
 
 from address_etl.settings import settings
-from address_etl.pls.queries import local_auth, locality, road, parcel, site, address
+from address_etl.pls.queries import (
+    local_auth,
+    locality,
+    road,
+    parcel,
+    site,
+    address,
+    place_name,
+)
 from address_etl.id_map import text_to_id_for_pk
 from address_etl.tables import create_metadata_table
 
@@ -169,6 +177,36 @@ def create_site_tables(cursor: sqlite3.Cursor):
     )
 
 
+def create_place_name_tables(cursor: sqlite3.Cursor):
+    logger.info("Creating lf_place_name table")
+    cursor.execute(
+        """
+        CREATE TABLE lf_place_name (
+            place_name_id TEXT PRIMARY KEY,
+            pl_name_status_code TEXT CHECK (length(pl_name_status_code) = 1) NOT NULL,
+            pl_name_type_code TEXT CHECK (length(pl_name_type_code) <= 4) NOT NULL,
+            pl_name TEXT CHECK (length(pl_name) <= 60) NOT NULL,
+            site_id TEXT NOT NULL,
+            hash TEXT,
+            FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
+        )
+    """
+    )
+
+    logger.info("Creating lf_place_name_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE lf_place_name_loaded (
+            place_name_id TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+    """
+    )
+
+    create_id_map_table("lf_place_name_id_map", cursor)
+    cursor.execute("CREATE INDEX idx_lf_place_name_site_id ON lf_place_name (site_id)")
+
+
 def create_geocode_tables(cursor: sqlite3.Cursor):
     logger.info("Creating lf_geocode_sp_survey_point table")
     cursor.execute(
@@ -251,6 +289,7 @@ def create_tables(cursor: sqlite3.Cursor):
     create_road_tables(cursor)
     create_parcel_tables(cursor)
     create_site_tables(cursor)
+    create_place_name_tables(cursor)
     create_geocode_tables(cursor)
     create_address_tables(cursor)
     cursor.connection.commit()
@@ -412,6 +451,39 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
+def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
+    start_time = time.time()
+    logger.info("Fetching place name data")
+    query = place_name.get_query(settings.debug)
+    response = client.post(
+        settings.sparql_endpoint,
+        headers={
+            "Content-Type": "application/sparql-query",
+            "Accept": "application/sparql-results+json",
+        },
+        data=query,
+    )
+    if response.status_code != 200:
+        raise Exception(f"Place name query failed: {response.text}")
+
+    rows = response.json()["results"]["bindings"]
+    logger.info(f"Found {len(rows)} place name rows")
+    for row in rows:
+        cursor.execute(
+            "INSERT INTO lf_place_name (place_name_id, pl_name_status_code, pl_name_type_code, pl_name, site_id) VALUES (?, ?, ?, ?, ?)",
+            (
+                row["place_name_id"]["value"],
+                row["pl_name_status_code"]["value"],
+                row["pl_name_type_code"]["value"],
+                row["pl_name"]["value"],
+                row["site_id"]["value"],
+            ),
+        )
+
+    cursor.connection.commit()
+    logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
+
+
 def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Populating address table")
@@ -512,9 +584,8 @@ def populate_tables(cursor: sqlite3.Cursor):
         populate_locality_tables(client, cursor)
         populate_road_tables(client, cursor)
         populate_parcel_tables(client, cursor)
-        # TODO: populate lf_locality_alias_with_link
         populate_site_tables(client, cursor)
-        # TODO: populate lf_place_name table
+        populate_place_name_tables(client, cursor)
         populate_address_tables(client, cursor)
 
         update_geocode_site_id(cursor)
@@ -522,4 +593,5 @@ def populate_tables(cursor: sqlite3.Cursor):
     text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)
     text_to_id_for_pk("lf_parcel_id_map", "lf_parcel", "parcel_id", cursor)
     text_to_id_for_pk("lf_site_id_map", "lf_site", "site_id", cursor)
+    text_to_id_for_pk("lf_place_name_id_map", "lf_place_name", "place_name_id", cursor)
     text_to_id_for_pk("lf_address_id_map", "lf_address", "addr_id", cursor)
