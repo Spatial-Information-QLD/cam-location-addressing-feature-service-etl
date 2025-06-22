@@ -78,7 +78,7 @@ def insert_geocodes_pls(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         if cursor.fetchone():
             cursor.execute(
                 """
-                UPDATE lf_geocode_sp_survey_point SET geocode_type = ?, address_pid = ?, site_id = ?, centoid_latitude = ?, centoid_longitude = ? WHERE geocode_id = ?
+                UPDATE lf_geocode_sp_survey_point SET geocode_type = ?, address_pid = ?, site_id = ?, centoid_lat = ?, centoid_lon = ? WHERE geocode_id = ?
                 """,
                 (
                     attrs["geocode_type"],
@@ -92,7 +92,7 @@ def insert_geocodes_pls(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         else:
             cursor.execute(
                 """
-                INSERT INTO lf_geocode_sp_survey_point (geocode_id, geocode_type, address_pid, site_id, centoid_latitude, centoid_longitude)
+                INSERT INTO lf_geocode_sp_survey_point (geocode_id, geocode_type, address_pid, site_id, centoid_lat, centoid_lon)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
                 (
@@ -167,6 +167,9 @@ class GeocodeImporter:
             "token": self.access_token,
             "f": "json",
         }
+        logger.info(
+            f"Fetching {batch_size} geocodes from {offset} of total {self.geocode_count}"
+        )
         response = self.client.get(
             settings.esri_geocode_rest_api_query_url, params=params
         )
