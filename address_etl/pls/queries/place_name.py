@@ -1,5 +1,4 @@
 from textwrap import dedent
-
 from jinja2 import Template
 
 
@@ -8,9 +7,15 @@ def get_query(debug: bool = False):
         dedent(
             """
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
+        PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
+        PREFIX cn: <https://linked.data.gov.au/def/cn/>
         PREFIX sdo: <https://schema.org/>
 
-        SELECT ?parcel_id ?plan_no ?lot_no
+        SELECT
+            (CONCAT(STR(?_place_name_id), "|", STR(?parcel_id), "|", STR(?addr_iri)) AS ?place_name_id)
+            ("P" AS ?pl_name_status_code)
+            ("PROP" AS ?pl_name_type_code)
+            ?pl_name (CONCAT(STR(?parcel_id), "|", STR(?addr_iri)) AS ?site_id)
         WHERE {
             {% if debug %}
             VALUES ?parcel_id {
@@ -30,26 +35,22 @@ def get_query(debug: bool = False):
                 <https://linked.data.gov.au/dataset/qld-addr/parcel/41SP317569>
             }
             {% endif %}
-
+            
             GRAPH <urn:qali:graph:addresses> {
                 ?parcel_id a addr:AddressableObject ;
-                sdo:identifier ?plan_no, ?_lot_no .
+                cn:hasName ?addr_iri .
 
-                FILTER(DATATYPE(?plan_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/plan>)
-                FILTER(DATATYPE(?_lot_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/lot>)
+                ?addr_iri a addr:Address .
 
-                # If it's a "0" with datatype of lot, then bind it as "9999"
-                BIND(
-                    COALESCE(
-                        IF(
-                            ?_lot_no = "0"^^<https://linked.data.gov.au/dataset/qld-addr/datatype/lot>,
-                            "9999"^^<https://linked.data.gov.au/dataset/qld-addr/datatype/lot>,
-                            1/0 # let it error to accept the default coalesce value
-                        ),
-                        ?_lot_no
-                    )
-                    AS ?lot_no
-                )
+                # property name
+                ?addr_iri sdo:hasPart [
+                        sdo:additionalType apt:propertyName ;
+                    sdo:value ?_place_name_id
+                ]
+
+                graph <urn:qali:graph:geographical-names> {
+                    ?_place_name_id sdo:name ?pl_name
+                }
             }
         }
         """

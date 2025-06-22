@@ -106,6 +106,7 @@ def main():
                     "lf_road_id_map",
                     "lf_parcel_id_map",
                     "lf_site_id_map",
+                    "lf_place_name_id_map",
                     "lf_address_id_map",
                 )
                 for table in map_id_tables:
@@ -127,6 +128,13 @@ def main():
             # hash the rows in the table
             hash_rows_in_table(
                 "addr_id", "hash", "lf_address", cursor, exclude_columns=("rowid",)
+            )
+            hash_rows_in_table(
+                "place_name_id",
+                "hash",
+                "lf_place_name",
+                cursor,
+                exclude_columns=("rowid",),
             )
             hash_rows_in_table(
                 "parcel_id", "hash", "lf_parcel", cursor, exclude_columns=("rowid",)

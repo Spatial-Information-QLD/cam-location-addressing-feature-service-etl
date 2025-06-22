@@ -174,16 +174,16 @@ def get_address_rows(
                 }
                 
                 # property name
-        #        optional {
-        #            ?iri sdo:hasPart [
-        #                    sdo:additionalType apt:propertyName ;
-        #                sdo:value ?property_name_object
-        #            ] .
-        #            
-        #            graph <urn:qali:graph:geographical-names> {
-        #            	?property_name_object sdo:name ?property_name    
-        #            }
-        #        }
+                optional {
+                    ?iri sdo:hasPart [
+                            sdo:additionalType apt:propertyName ;
+                        sdo:value ?property_name_object
+                    ] .
+                    
+                    graph <urn:qali:graph:geographical-names> {
+                    	?property_name_object sdo:name ?property_name    
+                    }
+                }
                 
                 # street no 1
                 OPTIONAL {
