@@ -17,10 +17,7 @@ def upload_file(bucket_name: str, key: str, file_path: str, s3: "S3") -> None:
 
 
 def download_file(bucket_name: str, key: str, file_path: str, s3: "S3") -> None:
-    logger.info(f"Downloading file {bucket_name}/{key} to {file_path}")
-    obj = s3.get_object(bucket_name, key)
-    with open(file_path, "wb") as file:
-        file.write(obj)
+    s3.download_object_to_file(bucket_name, key, file_path)
 
 
 def get_latest_file(bucket_name: str, s3: "S3", prefix: str = "") -> str | None:
@@ -135,6 +132,46 @@ class S3:
             return result["Body"].read()
         except boto3.exceptions.Boto3Error as e:
             logger.error(f"Failed to get S3 object: {str(e)}")
+            raise
+        except Exception:
+            logger.error(traceback.format_exc())
+            raise
+
+    def download_object_to_file(
+        self, bucket_name: str, key: str, file_path: str
+    ) -> None:
+        """
+        Download an S3 object directly to a file on disk without loading it into memory.
+        This is more memory-efficient for large files.
+        """
+        try:
+            logger.info(f"Downloading {bucket_name}/{key} to {file_path}")
+            self.client.download_file(bucket_name, key, file_path)
+        except boto3.exceptions.Boto3Error as e:
+            logger.error(f"Failed to download S3 object: {str(e)}")
+            raise
+        except Exception:
+            logger.error(traceback.format_exc())
+            raise
+
+    def download_object_to_file_streaming(
+        self, bucket_name: str, key: str, file_path: str, chunk_size: int = 8192
+    ) -> None:
+        """
+        Download an S3 object to a file using streaming with custom chunk size.
+        This gives you more control over the download process and memory usage.
+        """
+        try:
+            logger.info(
+                f"Downloading {bucket_name}/{key} to {file_path} with streaming"
+            )
+            result = self.client.get_object(Bucket=bucket_name, Key=key)
+
+            with open(file_path, "wb") as file:
+                for chunk in result["Body"].iter_chunks(chunk_size=chunk_size):
+                    file.write(chunk)
+        except boto3.exceptions.Boto3Error as e:
+            logger.error(f"Failed to download S3 object: {str(e)}")
             raise
         except Exception:
             logger.error(traceback.format_exc())
