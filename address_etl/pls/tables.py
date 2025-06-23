@@ -20,7 +20,7 @@ from address_etl.tables import create_metadata_table
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 10_000
+BATCH_SIZE = 2000
 
 
 def create_id_map_table(table_name: str, cursor: sqlite3.Cursor):
