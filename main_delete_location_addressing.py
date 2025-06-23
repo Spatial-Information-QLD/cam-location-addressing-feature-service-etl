@@ -60,7 +60,7 @@ if __name__ == "__main__":
             # Retrieve addresses
             params = {
                 "where": "1=1",
-                "outFields": "objectid",
+                "returnIdsOnly": "true",
                 "returnGeometry": "false",
                 "f": "json",
                 "resultOffset": 0,
@@ -82,10 +82,9 @@ if __name__ == "__main__":
                 raise Exception(f"Error getting addresses: {response.text}")
 
             data = response.json()
-            features = data["features"]
-            objectids = [feature["attributes"]["objectid"] for feature in features]
+            objectids = data["objectIds"]
 
-            if len(objectids) == 0:
+            if not objectids or len(objectids) == 0:
                 break
 
             # Delete addresses
