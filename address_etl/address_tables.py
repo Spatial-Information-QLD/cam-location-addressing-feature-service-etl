@@ -82,33 +82,33 @@ def create_tables(cursor: sqlite3.Cursor):
         """
         CREATE TABLE address_current_staging (
             id TEXT,
-            lot TEXT,
-            plan TEXT,
-            unit_type TEXT,
-            unit_number TEXT,
-            unit_suffix TEXT,
-            floor_type TEXT,
-            floor_number TEXT,
-            floor_suffix TEXT,
-            property_name TEXT,
-            street_no_1 TEXT,
-            street_no_1_suffix TEXT,
-            street_no_2 TEXT,
-            street_no_2_suffix TEXT,
-            street_number TEXT,
-            street_name TEXT,
-            street_type TEXT,
-            street_suffix TEXT,
-            street_full TEXT,
-            locality TEXT,
-            local_authority TEXT,
-            state TEXT,
-            address TEXT,
-            address_status TEXT,
-            address_standard TEXT,
-            lotplan_status TEXT,
+            lot TEXT CHECK(LENGTH(lot) <= 5),
+            plan TEXT CHECK(LENGTH(plan) <= 10),
+            unit_type TEXT CHECK(LENGTH(unit_type) <= 5),
+            unit_number TEXT CHECK(LENGTH(unit_number) <= 6),
+            unit_suffix TEXT CHECK(LENGTH(unit_suffix) <= 2),
+            floor_type TEXT CHECK(LENGTH(floor_type) <= 5),
+            floor_number TEXT CHECK(LENGTH(floor_number) <= 5),
+            floor_suffix TEXT CHECK(LENGTH(floor_suffix) <= 2),
+            property_name TEXT CHECK(LENGTH(property_name) <= 100),
+            street_no_1 TEXT CHECK(LENGTH(street_no_1) <= 11),
+            street_no_1_suffix TEXT CHECK(LENGTH(street_no_1_suffix) <= 2),
+            street_no_2 TEXT CHECK(LENGTH(street_no_2) <= 11),
+            street_no_2_suffix TEXT CHECK(LENGTH(street_no_2_suffix) <= 2),
+            street_number TEXT CHECK(LENGTH(street_number) <= 23),
+            street_name TEXT CHECK(LENGTH(street_name) <= 50),
+            street_type TEXT CHECK(LENGTH(street_type) <= 21),
+            street_suffix TEXT CHECK(LENGTH(street_suffix) <= 21),
+            street_full TEXT CHECK(LENGTH(street_full) <= 100),
+            locality TEXT CHECK(LENGTH(locality) <= 41),
+            local_authority TEXT CHECK(LENGTH(local_authority) <= 41),
+            state TEXT CHECK(LENGTH(state) <= 3),
+            address TEXT CHECK(LENGTH(address) <= 300),
+            address_status TEXT CHECK(LENGTH(address_status) <= 1),
+            address_standard TEXT CHECK(LENGTH(address_standard) <= 4),
+            lotplan_status TEXT CHECK(LENGTH(lotplan_status) <= 1),
             address_pid INTEGER,
-            geocode_type TEXT,
+            geocode_type TEXT CHECK(LENGTH(geocode_type) <= 5),
             latitude REAL,
             longitude REAL
         )
@@ -282,7 +282,7 @@ def populate_address_current_staging_table(
                 data["street_type"] = row.get("street_type", {}).get("value")
                 data["street_suffix"] = row.get("street_suffix", {}).get("value")
                 data["street_full"] = row.get("street_full", {}).get("value")
-                data["locality"] = row.get("locality", {}).get("value")
+                data["locality"] = row.get("locality", {}).get("value")[:41]
                 data["local_authority"] = row.get("local_authority", {}).get("value")
                 data["state"] = row.get("state", {}).get("value")
                 data["address"] = compute_address_concatenation(row)

@@ -152,9 +152,10 @@ def get_address_rows(
                     ] .
                     
                     graph ?floor_type_graph {
-                            ?floor_type_concept skos:prefLabel ?floor_type ;
-                                                skos:inScheme <https://linked.data.gov.au/def/building-level-types>
-                        }
+                        ?floor_type_concept skos:notation ?floor_type ;
+                        skos:inScheme <https://linked.data.gov.au/def/building-level-types>
+                        FILTER(DATATYPE(?floor_type) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
+                    }
                 }
                 
                 # floor number
