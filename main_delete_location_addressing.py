@@ -41,21 +41,21 @@ if __name__ == "__main__":
                 logger.info("ESRI token obtained")
                 token_use = 10
 
-            # Get addresses
-            total_count = get_total_count(
-                settings.esri_location_addressing_rest_api_query_url,
-                client,
-                access_token,
-                params={
-                    "where": "1=1",
-                    "f": "json",
-                    "returnCountOnly": "true",
-                },
-            )
+            # # Get addresses
+            # total_count = get_total_count(
+            #     settings.esri_location_addressing_rest_api_query_url,
+            #     client,
+            #     access_token,
+            #     params={
+            #         "where": "1=1",
+            #         "f": "json",
+            #         "returnCountOnly": "true",
+            #     },
+            # )
 
-            logger.info(f"Total addresses: {total_count}")
-            if total_count == 0:
-                break
+            # logger.info(f"Total addresses: {total_count}")
+            # if total_count == 0:
+            #     break
 
             # Retrieve addresses
             params = {
@@ -84,6 +84,9 @@ if __name__ == "__main__":
             data = response.json()
             features = data["features"]
             objectids = [feature["attributes"]["objectid"] for feature in features]
+
+            if len(objectids) == 0:
+                break
 
             # Delete addresses
             params = {
