@@ -251,10 +251,13 @@ def populate_address_current_staging_table(
             address_iris[i : i + 1000] for i in range(0, len(address_iris), 1000)
         ]
         logger.info(f"Split into {len(address_iri_chunks)} chunks for processing")
+        chunk_count = 0
 
         for address_iri_chunk in track(
             address_iri_chunks, description="Processing address IRIs"
         ):
+            chunk_count += 1
+            logger.info(f"Processing chunk {chunk_count} of {len(address_iri_chunks)}")
             rows = get_address_rows(address_iri_chunk, sparql_endpoint, client)
             modified_rows = []
             for row in rows:
