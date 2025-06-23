@@ -3,14 +3,13 @@ from textwrap import dedent
 from jinja2 import Template
 
 
-def get_query(debug: bool = False):
+def get_query_iris_only(debug: bool = False):
     return Template(
         dedent(
             """
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
-        PREFIX sdo: <https://schema.org/>
 
-        SELECT ?parcel_id ?plan_no ?lot_no
+        SELECT ?parcel_id
         WHERE {
             {% if debug %}
             VALUES ?parcel_id {
@@ -28,6 +27,32 @@ def get_query(debug: bool = False):
                 <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP101578>
                 <https://linked.data.gov.au/dataset/qld-addr/parcel/2RP141728>
                 <https://linked.data.gov.au/dataset/qld-addr/parcel/41SP317569>
+            }
+            {% endif %}
+                
+            GRAPH <urn:qali:graph:addresses> {
+                ?parcel_id a addr:AddressableObject .
+            }
+        }
+        """
+        )
+    ).render(debug=debug)
+
+
+def get_query(iris: list[str] = None):
+    return Template(
+        dedent(
+            """
+        PREFIX addr: <https://linked.data.gov.au/def/addr/>
+        PREFIX sdo: <https://schema.org/>
+
+        SELECT ?parcel_id ?plan_no ?lot_no
+        WHERE {
+            {% if iris %}
+            VALUES ?parcel_id {
+                {% for iri in iris %}
+                <{{ iri }}>     
+                {% endfor %}
             }
             {% endif %}
 
@@ -54,4 +79,4 @@ def get_query(debug: bool = False):
         }
         """
         )
-    ).render(debug=debug)
+    ).render(iris=iris)

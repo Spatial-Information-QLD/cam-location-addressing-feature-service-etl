@@ -20,6 +20,8 @@ from address_etl.tables import create_metadata_table
 
 logger = logging.getLogger(__name__)
 
+BATCH_SIZE = 2000
+
 
 def create_id_map_table(table_name: str, cursor: sqlite3.Cursor):
     logger.info(f"Creating {table_name} table")
@@ -223,6 +225,17 @@ def create_geocode_tables(cursor: sqlite3.Cursor):
     """
     )
 
+    logger.info("Creating lf_geocode_sp_survey_point_loaded table")
+    cursor.execute(
+        """
+        CREATE TABLE lf_geocode_sp_survey_point_loaded (
+            geocode_id TEXT,
+            loaded BOOLEAN DEFAULT FALSE
+        )
+    """
+    )
+
+    create_id_map_table("lf_geocode_sp_survey_point_id_map", cursor)
     cursor.execute(
         "CREATE INDEX idx_lf_geocode_sp_survey_point_address_pid ON lf_geocode_sp_survey_point (address_pid)"
     )
@@ -357,7 +370,7 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching road data")
-    query = road.get_query(settings.debug)
+    query = road.get_query_iris_only(debug=settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -369,29 +382,75 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     if response.status_code != 200:
         raise Exception(f"Road query failed: {response.text}")
 
-    rows = response.json()["results"]["bindings"]
-    logger.info(f"Found {len(rows)} road rows")
-    for row in rows:
-        cursor.execute(
-            "INSERT INTO lf_road (road_id, road_name, road_name_suffix, road_name_type, locality_code, road_cat_desc) VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                row["road_id"]["value"],
-                row["road_name"]["value"],
-                row.get("road_name_suffix", {}).get("value"),
-                row.get("road_name_type", {}).get("value"),
-                row["locality_code"]["value"],
-                row["road_cat_desc"]["value"],
-            ),
-        )
+    iris = [
+        {
+            "road": row["road"]["value"],
+            "locality_code": row["locality_code"]["value"],
+            "_road_name": row["_road_name"]["value"],
+        }
+        for row in response.json()["results"]["bindings"]
+    ]
+    total_iris = len(iris)
+    logger.info(f"Found {total_iris} road ids")
 
-    cursor.connection.commit()
+    processed_count = 0
+    for i in range(0, total_iris, BATCH_SIZE):
+        batch_iris = iris[i : i + BATCH_SIZE]
+        batch_size = len(batch_iris)
+
+        try:
+            query = road.get_query(iris=batch_iris)
+            response = client.post(
+                settings.sparql_endpoint,
+                headers={
+                    "Content-Type": "application/sparql-query",
+                    "Accept": "application/sparql-results+json",
+                },
+                data=query,
+            )
+            if response.status_code != 200:
+                raise Exception(
+                    f"Road query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
+                )
+
+            rows = response.json()["results"]["bindings"]
+
+            for row in rows:
+                try:
+                    cursor.execute(
+                        "INSERT INTO lf_road (road_id, road_name, road_name_suffix, road_name_type, locality_code, road_cat_desc) VALUES (?, ?, ?, ?, ?, ?)",
+                        (
+                            row["road_id"]["value"],
+                            row["road_name"]["value"],
+                            row.get("road_name_suffix", {}).get("value"),
+                            row.get("road_name_type", {}).get("value"),
+                            row["locality_code"]["value"],
+                            row["road_cat_desc"]["value"],
+                        ),
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to insert road {row['road_id']['value']}: {e}"
+                    )
+                    raise
+
+            cursor.connection.commit()
+            processed_count += batch_size
+            logger.info(
+                f"Processed {processed_count} of {total_iris} roads (batch {i//BATCH_SIZE + 1})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            raise
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
 def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching parcel data")
-    query = parcel.get_query(settings.debug)
+    query = parcel.get_query_iris_only(debug=settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -403,26 +462,59 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     if response.status_code != 200:
         raise Exception(f"Parcel query failed: {response.text}")
 
-    rows = response.json()["results"]["bindings"]
-    logger.info(f"Found {len(rows)} parcel rows")
-    for row in rows:
-        cursor.execute(
-            "INSERT INTO lf_parcel (parcel_id, plan_no, lot_no) VALUES (?, ?, ?)",
-            (
-                row["parcel_id"]["value"],
-                row["plan_no"]["value"],
-                row["lot_no"]["value"],
-            ),
-        )
+    iris = [row["parcel_id"]["value"] for row in response.json()["results"]["bindings"]]
+    total_iris = len(iris)
+    logger.info(f"Found {total_iris} parcel iris rows")
 
-    cursor.connection.commit()
+    processed_count = 0
+    for i in range(0, total_iris, BATCH_SIZE):
+        batch_iris = iris[i : i + BATCH_SIZE]
+        batch_size = len(batch_iris)
+
+        try:
+            query = parcel.get_query(iris=batch_iris)
+            response = client.post(
+                settings.sparql_endpoint,
+                headers={
+                    "Content-Type": "application/sparql-query",
+                    "Accept": "application/sparql-results+json",
+                },
+                data=query,
+            )
+            if response.status_code != 200:
+                raise Exception(
+                    f"Parcel query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
+                )
+
+            rows = response.json()["results"]["bindings"]
+
+            for row in rows:
+                cursor.execute(
+                    "INSERT INTO lf_parcel (parcel_id, plan_no, lot_no) VALUES (?, ?, ?)",
+                    (
+                        row["parcel_id"]["value"],
+                        row["plan_no"]["value"],
+                        row["lot_no"]["value"],
+                    ),
+                )
+
+            cursor.connection.commit()
+            processed_count += batch_size
+            logger.info(
+                f"Processed {processed_count} of {total_iris} parcels (batch {i//BATCH_SIZE + 1})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            raise
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
 def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching site data")
-    query = site.get_query(settings.debug)
+    query = site.get_query_iris_only(debug=settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -434,20 +526,59 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     if response.status_code != 200:
         raise Exception(f"Site query failed: {response.text}")
 
-    rows = response.json()["results"]["bindings"]
-    logger.info(f"Found {len(rows)} site rows")
-    for row in rows:
-        cursor.execute(
-            "INSERT INTO lf_site (site_id, parent_site_id, site_type, parcel_id) VALUES (?, ?, ?, ?)",
-            (
-                row["site_id"]["value"],
-                row.get("parent_site_id", {}).get("value"),
-                row["site_type"]["value"],
-                row["parcel_id"]["value"],
-            ),
-        )
+    iris = [
+        {
+            "parcel_id": row["parcel_id"]["value"],
+            "address": row["address"]["value"],
+        }
+        for row in response.json()["results"]["bindings"]
+    ]
+    total_iris = len(iris)
+    logger.info(f"Found {total_iris} site ids")
 
-    cursor.connection.commit()
+    processed_count = 0
+    for i in range(0, total_iris, BATCH_SIZE):
+        batch_iris = iris[i : i + BATCH_SIZE]
+        batch_size = len(batch_iris)
+
+        try:
+            query = site.get_query(iris=batch_iris)
+            response = client.post(
+                settings.sparql_endpoint,
+                headers={
+                    "Content-Type": "application/sparql-query",
+                    "Accept": "application/sparql-results+json",
+                },
+                data=query,
+            )
+            if response.status_code != 200:
+                raise Exception(
+                    f"Site query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
+                )
+
+            rows = response.json()["results"]["bindings"]
+
+            for row in rows:
+                cursor.execute(
+                    "INSERT INTO lf_site (site_id, parent_site_id, site_type, parcel_id) VALUES (?, ?, ?, ?)",
+                    (
+                        row["site_id"]["value"],
+                        row.get("parent_site_id", {}).get("value"),
+                        row["site_type"]["value"],
+                        row["parcel_id"]["value"],
+                    ),
+                )
+
+            cursor.connection.commit()
+            processed_count += batch_size
+            logger.info(
+                f"Processed {processed_count} of {total_iris} sites (batch {i//BATCH_SIZE + 1})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            raise
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
@@ -487,7 +618,7 @@ def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Populating address table")
-    query = address.get_query(settings.debug)
+    query = address.get_query_iris_only(debug=settings.debug)
     response = client.post(
         settings.sparql_endpoint,
         headers={
@@ -499,34 +630,76 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     if response.status_code != 200:
         raise Exception(f"Address query failed: {response.text}")
 
-    rows = response.json()["results"]["bindings"]
-    logger.info(f"Found {len(rows)} address rows")
-    for row in rows:
-        cursor.execute(
-            "INSERT INTO lf_address (addr_id, address_pid, parcel_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                row["addr_id"]["value"],
-                row["address_pid"]["value"],
-                row["parcel_id"]["value"],
-                row["addr_status_code"]["value"],
-                row.get("unit_type", {}).get("value"),
-                row.get("unit_no", {}).get("value"),
-                row.get("unit_suffix", {}).get("value"),
-                row.get("level_type", {}).get("value"),
-                row.get("level_no", {}).get("value"),
-                row.get("level_suffix", {}).get("value"),
-                row.get("street_no_first", {}).get("value"),
-                row.get("street_no_first_suffix", {}).get("value"),
-                row.get("street_no_last", {}).get("value"),
-                row.get("street_no_last_suffix", {}).get("value"),
-                row["road_id"]["value"],
-                row["site_id"]["value"],
-                row.get("location_desc", {}).get("value"),
-                row["address_standard"]["value"],
-            ),
-        )
+    iris = [
+        {
+            "addr_iri": row["addr_iri"]["value"],
+            "parcel_id": row["parcel_id"]["value"],
+            "road": row["road"]["value"],
+            "locality_code": row["locality_code"]["value"],
+            "_road_name": row["_road_name"]["value"],
+        }
+        for row in response.json()["results"]["bindings"]
+    ]
+    total_iris = len(iris)
+    logger.info(f"Found {total_iris} address ids")
 
-    cursor.connection.commit()
+    processed_count = 0
+    for i in range(0, total_iris, BATCH_SIZE):
+        batch_iris = iris[i : i + BATCH_SIZE]
+        batch_size = len(batch_iris)
+
+        try:
+            query = address.get_query(iris=batch_iris)
+            response = client.post(
+                settings.sparql_endpoint,
+                headers={
+                    "Content-Type": "application/sparql-query",
+                    "Accept": "application/sparql-results+json",
+                },
+                data=query,
+            )
+            if response.status_code != 200:
+                raise Exception(
+                    f"Address query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
+                )
+
+            rows = response.json()["results"]["bindings"]
+
+            for row in rows:
+                cursor.execute(
+                    "INSERT INTO lf_address (addr_id, address_pid, parcel_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        row["addr_id"]["value"],
+                        row["address_pid"]["value"],
+                        row["parcel_id"]["value"],
+                        row["addr_status_code"]["value"],
+                        row.get("unit_type", {}).get("value"),
+                        row.get("unit_no", {}).get("value"),
+                        row.get("unit_suffix", {}).get("value"),
+                        row.get("level_type", {}).get("value"),
+                        row.get("level_no", {}).get("value"),
+                        row.get("level_suffix", {}).get("value"),
+                        row.get("street_no_first", {}).get("value"),
+                        row.get("street_no_first_suffix", {}).get("value"),
+                        row.get("street_no_last", {}).get("value"),
+                        row.get("street_no_last_suffix", {}).get("value"),
+                        row["road_id"]["value"],
+                        row["site_id"]["value"],
+                        row.get("location_desc", {}).get("value"),
+                        row["address_standard"]["value"],
+                    ),
+                )
+
+            cursor.connection.commit()
+            processed_count += batch_size
+            logger.info(
+                f"Processed {processed_count} of {total_iris} addresses (batch {i//BATCH_SIZE + 1})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            raise
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 

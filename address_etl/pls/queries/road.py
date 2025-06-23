@@ -2,7 +2,7 @@ from textwrap import dedent
 from jinja2 import Template
 
 
-def get_query(debug: bool = False):
+def get_query_iris_only(debug: bool = False):
     return Template(
         dedent(
             """
@@ -13,7 +13,7 @@ def get_query(debug: bool = False):
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 
-        SELECT DISTINCT (CONCAT(STR(?road), "/", ?locality_code, "/", ?road_name) AS ?road_id) ?road_name ?road_name_suffix ?road_name_type ?locality_code ?road_cat_desc
+        SELECT DISTINCT ?road ?locality_code ?_road_name
         WHERE {
             GRAPH <urn:qali:graph:addresses> {
                 {% if debug %}
@@ -36,6 +36,61 @@ def get_query(debug: bool = False):
 
                 ?parcel_id a addr:AddressableObject ;
                     cn:hasName ?iri .
+                {% endif %}
+            
+                ?iri a addr:Address ;
+                sdo:hasPart [
+                        sdo:additionalType apt:road ;
+                    sdo:value ?road
+                ],
+                        [
+                        sdo:additionalType apt:locality ;
+                    sdo:value ?locality
+                ] .
+
+                # Locality
+                GRAPH <urn:qali:graph:geographical-names> {
+                    ?locality sdo:additionalProperty [
+                            sdo:propertyID "lalf.locality_code" ;
+                        sdo:value ?locality_code
+                    ]
+                }
+
+                GRAPH <urn:qali:graph:roads> {
+                    # Road Name
+                    ?road sdo:hasPart [
+                            sdo:additionalType rnpt:roadGivenName ;
+                        sdo:value ?_road_name
+                    ] .
+                    BIND(UCASE(?_road_name) as ?road_name)
+                }
+            }
+        }
+        """
+        )
+    ).render(debug=debug)
+
+
+def get_query(iris: list = None):
+    return Template(
+        dedent(
+            """
+        PREFIX addr: <https://linked.data.gov.au/def/addr/>
+        PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
+        PREFIX cn: <https://linked.data.gov.au/def/cn/>
+        PREFIX rnpt: <https://linked.data.gov.au/def/road-name-part-types/>
+        PREFIX sdo: <https://schema.org/>
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+        SELECT DISTINCT (CONCAT(STR(?road), "/", ?locality_code, "/", ?road_name) AS ?road_id) ?road_name ?road_name_suffix ?road_name_type ?locality_code ?road_cat_desc
+        WHERE {
+            GRAPH <urn:qali:graph:addresses> {
+                {% if iris %}
+                VALUES (?road ?locality_code ?_road_name) {
+                    {% for iri in iris %}
+                    (<{{ iri["road"] }}> "{{ iri["locality_code"] }}" "{{ iri["_road_name"] }}")
+                    {% endfor %}
+                }
                 {% endif %}
 
                 ?iri a addr:Address ;
@@ -96,4 +151,4 @@ def get_query(debug: bool = False):
         }
         """
         )
-    ).render(debug=debug)
+    ).render(iris=iris)

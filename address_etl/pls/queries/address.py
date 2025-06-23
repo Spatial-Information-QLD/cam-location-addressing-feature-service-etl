@@ -3,7 +3,78 @@ from textwrap import dedent
 from jinja2 import Template
 
 
-def get_query(debug: bool = False):
+def get_query_iris_only(debug: bool = False):
+    return Template(
+        dedent(
+            """
+        PREFIX addr: <https://linked.data.gov.au/def/addr/>
+        PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
+        PREFIX cn: <https://linked.data.gov.au/def/cn/>
+        PREFIX rnpt: <https://linked.data.gov.au/def/road-name-part-types/>
+        PREFIX sdo: <https://schema.org/>
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+        SELECT DISTINCT ?addr_iri ?parcel_id ?road ?locality_code ?_road_name
+        WHERE {
+            {% if debug %}
+            VALUES ?parcel_id {
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/59SP217152>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/58SP217152>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/57SP217152>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217150>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217150>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/0SP217149>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217149>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217149>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/235RP33643>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP101578>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/2RP141728>
+                <https://linked.data.gov.au/dataset/qld-addr/parcel/41SP317569>
+            }
+            {% endif %}
+
+            GRAPH <urn:qali:graph:addresses> {
+                ?parcel_id a addr:AddressableObject ;
+                    cn:hasName ?addr_iri .
+                
+                ?addr_iri a addr:Address .
+
+                # Road
+                ?addr_iri sdo:hasPart [
+                        sdo:additionalType apt:road ;
+                    sdo:value ?road
+                ],
+                        [
+                        sdo:additionalType apt:locality ;
+                    sdo:value ?locality
+                ] .
+
+                # Locality
+                GRAPH <urn:qali:graph:geographical-names> {
+                    ?locality sdo:additionalProperty [
+                            sdo:propertyID "lalf.locality_code" ;
+                        sdo:value ?locality_code
+                    ]
+                }
+
+                GRAPH <urn:qali:graph:roads> {
+                    # Road Name
+                    ?road sdo:hasPart [
+                            sdo:additionalType rnpt:roadGivenName ;
+                        sdo:value ?_road_name
+                    ] .
+                    BIND(UCASE(?_road_name) as ?road_name)
+                }
+            }
+        }
+        """
+        )
+    ).render(debug=debug)
+
+
+def get_query(debug: bool = False, iris: list = None):
     return Template(
         dedent(
             """
@@ -34,22 +105,11 @@ def get_query(debug: bool = False):
             ?location_desc
             ?address_standard
         WHERE {
-            {% if debug %}
-            VALUES ?parcel_id {
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/59SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/58SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/57SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217150>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217150>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/0SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/235RP33643>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP101578>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2RP141728>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/41SP317569>
+            {% if iris %}
+            VALUES (?addr_iri ?parcel_id ?road ?locality_code ?_road_name) {
+                {% for iri in iris %}
+                (<{{ iri["addr_iri"] }}> <{{ iri["parcel_id"] }}> <{{ iri["road"] }}> "{{ iri["locality_code"] }}" "{{ iri["_road_name"] }}")
+                {% endfor %}
             }
             {% endif %}
 
@@ -209,4 +269,4 @@ def get_query(debug: bool = False):
         }
         """
         )
-    ).render(debug=debug)
+    ).render(iris=iris)
