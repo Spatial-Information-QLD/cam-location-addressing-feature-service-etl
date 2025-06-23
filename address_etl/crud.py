@@ -20,7 +20,7 @@ def delete_records_from_esri(
     esri_apply_edits_url: str,
 ):
     start_time = time.time()
-    batch_size = 10_000
+    batch_size = 2000
 
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         token_use = 0
@@ -117,7 +117,7 @@ def insert_addresses_into_esri(
     address_pids: Sequence[str], esri_url: str, cursor: sqlite3.Cursor
 ):
     start_time = time.time()
-    batch_size = 10_000
+    batch_size = 2000
     job_id = 1
 
     # Insert address_pids into address_current_loaded table
