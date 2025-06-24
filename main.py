@@ -148,6 +148,7 @@ def main():
                 f"{S3_FILE_PREFIX_KEY}{current_datetime_str}/address.db",
                 settings.sqlite_conn_str,
                 s3,
+                presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
             )
 
         finally:
