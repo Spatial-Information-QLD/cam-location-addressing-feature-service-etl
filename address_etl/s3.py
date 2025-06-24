@@ -10,10 +10,24 @@ from address_etl.settings import Settings
 logger = logging.getLogger(__name__)
 
 
-def upload_file(bucket_name: str, key: str, file_path: str, s3: "S3") -> None:
-    with open(file_path, "rb") as file:
-        logger.info(f"Uploading file {file_path} to {bucket_name}/{key}")
-        s3.create_object(bucket_name, key, file.read())
+def upload_file(
+    bucket_name: str,
+    key: str,
+    file_path: str,
+    s3: "S3",
+    presigned_url_expiry_seconds: int = 3600,
+) -> str:
+    logger.info(f"Uploading file {file_path} to {bucket_name}/{key}")
+    s3.client.upload_file(file_path, bucket_name, key)
+
+    # Create presigned URL for the uploaded file
+    presigned_url = s3.client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket_name, "Key": key},
+        ExpiresIn=presigned_url_expiry_seconds,
+    )
+    logger.info(f"Created presigned URL for {bucket_name}/{key}: {presigned_url}")
+    return presigned_url
 
 
 def download_file(bucket_name: str, key: str, file_path: str, s3: "S3") -> None:

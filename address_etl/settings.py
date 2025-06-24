@@ -100,6 +100,7 @@ class Settings(BaseSettings):
     # S3
     s3_bucket_name: str = "location-addressing-feature-service-etl"
     pls_s3_bucket_name: str = "pls-feature-service-etl"
+    s3_presigned_url_expiry_seconds: int = 3600
 
     # Minio S3 settings used only for testing
     # Application code assumes role when running in AWS
