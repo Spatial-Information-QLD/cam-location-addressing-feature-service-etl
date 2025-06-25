@@ -367,6 +367,7 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Found {total_iris} road ids")
 
     processed_count = 0
+    seen_road_ids = set()
     for i in range(0, total_iris, BATCH_SIZE):
         batch_iris = iris[i : i + BATCH_SIZE]
         batch_size = len(batch_iris)
@@ -378,6 +379,10 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             for row in rows:
                 try:
+                    if row["road_id"]["value"] in seen_road_ids:
+                        continue
+                    seen_road_ids.add(row["road_id"]["value"])
+
                     cursor.execute(
                         "INSERT INTO lf_road (road_id, road_name, road_name_suffix, road_name_type, locality_code, road_cat_desc) VALUES (?, ?, ?, ?, ?, ?)",
                         (

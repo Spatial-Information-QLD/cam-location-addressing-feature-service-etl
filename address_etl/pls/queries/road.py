@@ -82,7 +82,7 @@ def get_query(iris: list = None):
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 
-        SELECT DISTINCT (CONCAT(STR(?road), "/", ?locality_code, "/", ?road_name) AS ?road_id) ?road_name ?road_name_suffix ?road_name_type ?locality_code ?road_cat_desc
+        SELECT (CONCAT(STR(?road), "/", ?locality_code, "/", ?road_name) AS ?road_id) ?road_name ?road_name_suffix ?road_name_type ?locality_code ?road_cat_desc
         WHERE {
             GRAPH <urn:qali:graph:addresses> {
                 {% if iris %}
