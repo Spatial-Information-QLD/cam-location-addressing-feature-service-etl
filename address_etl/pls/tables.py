@@ -236,7 +236,6 @@ def create_geocode_tables(cursor: sqlite3.Cursor):
     """
     )
 
-    create_id_map_table("lf_geocode_sp_survey_point_id_map", cursor)
     cursor.execute(
         "CREATE INDEX idx_lf_geocode_sp_survey_point_address_pid ON lf_geocode_sp_survey_point (address_pid)"
     )
