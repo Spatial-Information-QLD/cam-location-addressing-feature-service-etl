@@ -1,6 +1,8 @@
 import httpx
 from jinja2 import Template
 
+from address_etl.crud import sparql_query
+
 
 def get_address_rows(
     address_iris: list[str], sparql_endpoint: str, client: httpx.Client
@@ -267,14 +269,5 @@ def get_address_rows(
         }
     """
     ).render(address_iris=address_iris)
-    response = client.post(
-        sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Address rows query failed: {response.text}")
+    response = sparql_query(sparql_endpoint, query, client)
     return response.json()["results"]["bindings"]

@@ -159,7 +159,8 @@ def main():
                 exclude_columns=("rowid",),
             )
 
-            compute_diff_and_sync(cursor, PREVIOUS_DB_PATH)
+            # NOTE: We no longer need to compute the diff and sync it with the Esri feature service.
+            # compute_diff_and_sync(cursor, PREVIOUS_DB_PATH)
 
             current_datetime = datetime.now(pytz.UTC)
             brisbane_time = utc_to_brisbane_time(current_datetime)

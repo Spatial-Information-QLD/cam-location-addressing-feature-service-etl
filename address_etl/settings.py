@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     esri_referer: str = "https://qportal.information.qld.gov.au/arcgis/"
 
     populate_geocode_table: bool = True
-    http_retry_max_time_in_seconds: int = 3600
+    http_retry_max_time_in_seconds: int = 900
     http_timeout_in_seconds: int = 600
     debug: bool = False
 

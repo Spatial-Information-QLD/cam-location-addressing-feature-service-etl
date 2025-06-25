@@ -3,6 +3,8 @@ from textwrap import dedent
 import httpx
 from jinja2 import Template
 
+from address_etl.crud import sparql_query
+
 
 def address_iris_query(limit: int | None = None):
     """
@@ -52,14 +54,5 @@ def get_address_iris(
     The limit parameter is optional and only used for testing.
     """
     query = address_iris_query(limit)
-    response = client.post(
-        sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Failed to get address IRIs: {response.text}")
+    response = sparql_query(sparql_endpoint, query, client)
     return [row["iri"]["value"] for row in response.json()["results"]["bindings"]]
