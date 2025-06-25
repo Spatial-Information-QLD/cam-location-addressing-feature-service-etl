@@ -17,6 +17,7 @@ from address_etl.pls.queries import (
 )
 from address_etl.id_map import text_to_id_for_pk
 from address_etl.tables import create_metadata_table
+from address_etl.crud import sparql_query
 
 logger = logging.getLogger(__name__)
 
@@ -314,16 +315,7 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
     # local_auth table
     query = local_auth.get_query()
-    response = client.post(
-        settings.sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Locality query failed: {response.text}")
+    response = sparql_query(settings.sparql_endpoint, query, client)
 
     rows = response.json()["results"]["bindings"]
     logger.info(f"Found {len(rows)} local_auth rows")
@@ -337,16 +329,7 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
     # locality table
     query = locality.get_query()
-    response = client.post(
-        settings.sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Locality query failed: {response.text}")
+    response = sparql_query(settings.sparql_endpoint, query, client)
 
     rows = response.json()["results"]["bindings"]
     logger.info(f"Found {len(rows)} locality rows")
@@ -371,16 +354,7 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching road data")
     query = road.get_query_iris_only(debug=settings.debug)
-    response = client.post(
-        settings.sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Road query failed: {response.text}")
+    response = sparql_query(settings.sparql_endpoint, query, client)
 
     iris = [
         {
@@ -400,19 +374,7 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
         try:
             query = road.get_query(iris=batch_iris)
-            response = client.post(
-                settings.sparql_endpoint,
-                headers={
-                    "Content-Type": "application/sparql-query",
-                    "Accept": "application/sparql-results+json",
-                },
-                data=query,
-            )
-            if response.status_code != 200:
-                raise Exception(
-                    f"Road query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
-                )
-
+            response = sparql_query(settings.sparql_endpoint, query, client)
             rows = response.json()["results"]["bindings"]
 
             for row in rows:
@@ -451,16 +413,7 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching parcel data")
     query = parcel.get_query_iris_only(debug=settings.debug)
-    response = client.post(
-        settings.sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Parcel query failed: {response.text}")
+    response = sparql_query(settings.sparql_endpoint, query, client)
 
     iris = [row["parcel_id"]["value"] for row in response.json()["results"]["bindings"]]
     total_iris = len(iris)
@@ -473,19 +426,7 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
         try:
             query = parcel.get_query(iris=batch_iris)
-            response = client.post(
-                settings.sparql_endpoint,
-                headers={
-                    "Content-Type": "application/sparql-query",
-                    "Accept": "application/sparql-results+json",
-                },
-                data=query,
-            )
-            if response.status_code != 200:
-                raise Exception(
-                    f"Parcel query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
-                )
-
+            response = sparql_query(settings.sparql_endpoint, query, client)
             rows = response.json()["results"]["bindings"]
 
             for row in rows:
@@ -515,16 +456,7 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching site data")
     query = site.get_query_iris_only(debug=settings.debug)
-    response = client.post(
-        settings.sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Site query failed: {response.text}")
+    response = sparql_query(settings.sparql_endpoint, query, client)
 
     iris = [
         {
@@ -543,18 +475,7 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
         try:
             query = site.get_query(iris=batch_iris)
-            response = client.post(
-                settings.sparql_endpoint,
-                headers={
-                    "Content-Type": "application/sparql-query",
-                    "Accept": "application/sparql-results+json",
-                },
-                data=query,
-            )
-            if response.status_code != 200:
-                raise Exception(
-                    f"Site query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
-                )
+            response = sparql_query(settings.sparql_endpoint, query, client)
 
             rows = response.json()["results"]["bindings"]
 
@@ -586,16 +507,7 @@ def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching place name data")
     query = place_name.get_query(settings.debug)
-    response = client.post(
-        settings.sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Place name query failed: {response.text}")
+    response = sparql_query(settings.sparql_endpoint, query, client)
 
     rows = response.json()["results"]["bindings"]
     logger.info(f"Found {len(rows)} place name rows")
@@ -619,16 +531,7 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Populating address table")
     query = address.get_query_iris_only(debug=settings.debug)
-    response = client.post(
-        settings.sparql_endpoint,
-        headers={
-            "Content-Type": "application/sparql-query",
-            "Accept": "application/sparql-results+json",
-        },
-        data=query,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Address query failed: {response.text}")
+    response = sparql_query(settings.sparql_endpoint, query, client)
 
     iris = [
         {
@@ -650,18 +553,7 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
         try:
             query = address.get_query(iris=batch_iris)
-            response = client.post(
-                settings.sparql_endpoint,
-                headers={
-                    "Content-Type": "application/sparql-query",
-                    "Accept": "application/sparql-results+json",
-                },
-                data=query,
-            )
-            if response.status_code != 200:
-                raise Exception(
-                    f"Address query failed for batch {i//BATCH_SIZE + 1}: {response.text}"
-                )
+            response = sparql_query(settings.sparql_endpoint, query, client)
 
             rows = response.json()["results"]["bindings"]
 
