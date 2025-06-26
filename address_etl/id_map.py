@@ -30,56 +30,89 @@ def text_to_id_for_pk(
         f"Mapping table {table_name} column {pk_column_name} to the id in {map_table_name}"
     )
 
-    # Insert new identifiers into the map table.
+    # Optimize SQLite settings for bulk operations
+    cursor.execute("PRAGMA foreign_keys = OFF")
+    cursor.execute("PRAGMA journal_mode = WAL")
+    cursor.execute("PRAGMA synchronous = NORMAL")
+    cursor.execute("PRAGMA cache_size = -64000")  # 64MB cache
+    cursor.execute("PRAGMA temp_store = MEMORY")
+
     logger.info(f"Inserting new identifiers into {map_table_name}")
 
     cursor.execute(
         f"""
-        SELECT rowid, {pk_column_name}
-        FROM {table_name}
-        WHERE {pk_column_name} NOT IN (
-            SELECT iri FROM {map_table_name}
-            UNION
-            SELECT id FROM {map_table_name}
-        );
+        INSERT INTO {map_table_name} (iri)
+        SELECT DISTINCT t.{pk_column_name}
+        FROM {table_name} t
+        LEFT JOIN {map_table_name} m ON t.{pk_column_name} = m.iri
+        WHERE m.iri IS NULL
         """
     )
-    results = cursor.fetchall()
 
-    logger.info(f"Total new identifiers to insert: {len(results)}")
-    cursor.executemany(
-        f"""
-        INSERT INTO {map_table_name} (iri) VALUES (?)
-        """,
-        [(row[pk_column_name],) for row in results],
-    )
+    inserted_count = cursor.rowcount
+    logger.info(f"Inserted {inserted_count} new identifiers into {map_table_name}")
     cursor.connection.commit()
 
     # Update the focus table to have the integer value of the map table
     logger.info(f"Updating {table_name} to have the integer value of {map_table_name}")
-    cursor.execute(
-        f"SELECT {table_name}.rowid FROM {table_name} LEFT JOIN {map_table_name} ON {table_name}.{pk_column_name} = {map_table_name}.id WHERE {map_table_name}.id IS NULL"
-    )
-    results = cursor.fetchall()
-    total_rows = len(results)
-    batch_size = 10000
 
-    for offset in range(0, total_rows, batch_size):
-        logger.info(
-            f"Processing batch {offset//batch_size + 1} of {(total_rows + batch_size - 1)//batch_size}"
+    batch_size = 10000
+    total_updated = 0
+
+    while True:
+        # Get batch of records that need updating
+        cursor.execute(
+            f"""
+            SELECT t.rowid, t.{pk_column_name}
+            FROM {table_name} t
+            LEFT JOIN {map_table_name} m ON t.{pk_column_name} = m.iri
+            WHERE m.id IS NOT NULL AND t.{pk_column_name} != m.id
+            LIMIT {batch_size}
+        """
         )
 
-        query = f"""
+        batch_results = cursor.fetchall()
+
+        if not batch_results:
+            break
+
+        # Create temporary mapping table for this batch
+        cursor.execute(
+            "CREATE TEMPORARY TABLE temp_id_mapping (rowid INTEGER, new_id INTEGER)"
+        )
+
+        # Insert batch data into temp table
+        cursor.executemany(
+            "INSERT INTO temp_id_mapping (rowid, new_id) VALUES (?, ?)",
+            [(row["rowid"], row[pk_column_name]) for row in batch_results],
+        )
+
+        # Update the main table using the temp mapping
+        cursor.execute(
+            f"""
             UPDATE {table_name}
             SET {pk_column_name} = (
-                SELECT id 
-                FROM {map_table_name} 
-                WHERE iri = {table_name}.{pk_column_name}
+                SELECT m.id 
+                FROM {map_table_name} m 
+                WHERE m.iri = {table_name}.{pk_column_name}
             )
-            WHERE {table_name}.rowid IN ({', '.join(str(row["rowid"]) for row in results[offset:offset+batch_size])})
+            WHERE rowid IN (SELECT rowid FROM temp_id_mapping)
         """
-        cursor.execute(query)
+        )
+
+        rows_updated = cursor.rowcount
+        total_updated += rows_updated
+
+        # Clean up temp table
+        cursor.execute("DROP TABLE temp_id_mapping")
+
         cursor.connection.commit()
+        logger.info(f"Updated {total_updated} records so far")
+
+    # Restore normal SQLite settings
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("PRAGMA optimize")
+    cursor.connection.commit()
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
