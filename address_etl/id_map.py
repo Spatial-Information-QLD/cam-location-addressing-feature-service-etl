@@ -30,12 +30,17 @@ def text_to_id_for_pk(
         f"Mapping table {table_name} column {pk_column_name} to the id in {map_table_name}"
     )
 
-    # Optimize SQLite settings for bulk operations
+    # More aggressive SQLite optimizations for ECS environment
     cursor.execute("PRAGMA foreign_keys = OFF")
     cursor.execute("PRAGMA journal_mode = WAL")
     cursor.execute("PRAGMA synchronous = NORMAL")
-    cursor.execute("PRAGMA cache_size = -64000")  # 64MB cache
+    cursor.execute("PRAGMA cache_size = -128000")  # 128MB cache for 16GB memory
     cursor.execute("PRAGMA temp_store = MEMORY")
+    cursor.execute("PRAGMA mmap_size = 536870912")  # 512MB memory mapping
+    cursor.execute("PRAGMA page_size = 65536")  # Larger page size for better I/O
+    cursor.execute(
+        "PRAGMA auto_vacuum = NONE"
+    )  # Disable auto-vacuum during bulk operations
 
     logger.info(f"Inserting new identifiers into {map_table_name}")
 
@@ -56,7 +61,8 @@ def text_to_id_for_pk(
     # Update the focus table to have the integer value of the map table
     logger.info(f"Updating {table_name} to have the integer value of {map_table_name}")
 
-    batch_size = 10000
+    # Increased batch size for better performance in ECS
+    batch_size = 25000
     total_updated = 0
 
     while True:
@@ -76,18 +82,11 @@ def text_to_id_for_pk(
         if not batch_results:
             break
 
-        # Create temporary mapping table for this batch
-        cursor.execute(
-            "CREATE TEMPORARY TABLE temp_id_mapping (rowid INTEGER, new_id INTEGER)"
-        )
+        # More efficient approach: use a single UPDATE with JOIN instead of temp table
+        # Build the mapping directly in the UPDATE statement
+        placeholders = ",".join("?" * len(batch_results))
+        rowids = [row["rowid"] for row in batch_results]
 
-        # Insert batch data into temp table
-        cursor.executemany(
-            "INSERT INTO temp_id_mapping (rowid, new_id) VALUES (?, ?)",
-            [(row["rowid"], row[pk_column_name]) for row in batch_results],
-        )
-
-        # Update the main table using the temp mapping
         cursor.execute(
             f"""
             UPDATE {table_name}
@@ -96,21 +95,25 @@ def text_to_id_for_pk(
                 FROM {map_table_name} m 
                 WHERE m.iri = {table_name}.{pk_column_name}
             )
-            WHERE rowid IN (SELECT rowid FROM temp_id_mapping)
-        """
+            WHERE rowid IN ({placeholders})
+        """,
+            rowids,
         )
 
         rows_updated = cursor.rowcount
         total_updated += rows_updated
 
-        # Clean up temp table
-        cursor.execute("DROP TABLE temp_id_mapping")
+        # Commit less frequently for better performance
+        if total_updated % (batch_size * 5) == 0:
+            cursor.connection.commit()
+            logger.info(f"Updated {total_updated} records so far")
 
-        cursor.connection.commit()
-        logger.info(f"Updated {total_updated} records so far")
+    # Final commit
+    cursor.connection.commit()
 
     # Restore normal SQLite settings
     cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("PRAGMA auto_vacuum = INCREMENTAL")
     cursor.execute("PRAGMA optimize")
     cursor.connection.commit()
 

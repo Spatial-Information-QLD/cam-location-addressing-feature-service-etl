@@ -468,14 +468,19 @@ def optimize_sqlite_for_bulk_inserts(cursor: sqlite3.Cursor):
     cursor.execute("PRAGMA foreign_keys = OFF")
     cursor.execute("PRAGMA journal_mode = WAL")
     cursor.execute("PRAGMA synchronous = NORMAL")
-    cursor.execute("PRAGMA cache_size = -64000")  # 64MB cache
+    cursor.execute("PRAGMA cache_size = -128000")  # 128MB cache for 16GB memory
     cursor.execute("PRAGMA temp_store = MEMORY")
-    cursor.execute("PRAGMA mmap_size = 268435456")  # 256MB mmap
+    cursor.execute("PRAGMA mmap_size = 536870912")  # 512MB memory mapping
+    cursor.execute("PRAGMA page_size = 65536")  # Larger page size for better I/O
+    cursor.execute(
+        "PRAGMA auto_vacuum = NONE"
+    )  # Disable auto-vacuum during bulk operations
 
 
 def restore_sqlite_settings(cursor: sqlite3.Cursor):
     """Restore normal SQLite settings after bulk operations"""
     cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("PRAGMA auto_vacuum = INCREMENTAL")
     cursor.execute("PRAGMA optimize")
     cursor.connection.commit()
 
@@ -817,13 +822,13 @@ def update_geocode_site_id(cursor: sqlite3.Cursor):
 def populate_tables(cursor: sqlite3.Cursor):
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         populate_locality_tables(client, cursor)
-        
+
         populate_road_tables(client, cursor)
         create_road_indexes(cursor)
-        
+
         populate_parcel_tables(client, cursor)
         create_parcel_indexes(cursor)
-        
+
         populate_site_tables(client, cursor)
         create_site_indexes(cursor)
 
@@ -833,7 +838,7 @@ def populate_tables(cursor: sqlite3.Cursor):
         populate_address_tables(client, cursor)
         create_address_indexes(cursor)
 
-        # This will create the geocode table's index as well
+        # # This will create the geocode table's index as well
         update_geocode_site_id(cursor)
 
     text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)
