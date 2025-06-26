@@ -65,7 +65,6 @@ def get_query_iris_only(debug: bool = False):
                             sdo:additionalType rnpt:roadGivenName ;
                         sdo:value ?_road_name
                     ] .
-                    BIND(UCASE(?_road_name) as ?road_name)
                 }
             }
         }
@@ -74,7 +73,7 @@ def get_query_iris_only(debug: bool = False):
     ).render(debug=debug)
 
 
-def get_query(debug: bool = False, iris: list = None):
+def get_query(iris: list = None):
     return Template(
         dedent(
             """
@@ -121,9 +120,6 @@ def get_query(debug: bool = False, iris: list = None):
                     sdo:identifier ?address_pid ;
                     addr:hasStatus ?addr_status .
                 FILTER(DATATYPE(?address_pid) = <https://linked.data.gov.au/dataset/qld-addr/datatype/address-pid>)
-                
-                # addr id
-                BIND(CONCAT(STR(?addr_iri), "/", ?road_id, "/", STR(?parcel_id)) AS ?addr_id)
 
                 # addr status code
                 GRAPH ?addr_status_vocab_graph {
@@ -265,6 +261,9 @@ def get_query(debug: bool = False, iris: list = None):
                     skos:inScheme <https://linked.data.gov.au/def/addr-classes> .
                     FILTER(DATATYPE(?address_standard) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
                 }
+
+                # addr id
+                BIND(CONCAT(STR(?addr_iri), "/", ?road_id, "/", STR(?parcel_id)) AS ?addr_id)
             }
         }
         """

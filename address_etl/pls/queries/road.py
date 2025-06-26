@@ -62,7 +62,6 @@ def get_query_iris_only(debug: bool = False):
                             sdo:additionalType rnpt:roadGivenName ;
                         sdo:value ?_road_name
                     ] .
-                    BIND(UCASE(?_road_name) as ?road_name)
                 }
             }
         }
@@ -78,71 +77,48 @@ def get_query(iris: list = None):
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
         PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
         PREFIX cn: <https://linked.data.gov.au/def/cn/>
+        PREFIX roads: <https://linked.data.gov.au/def/roads/>
         PREFIX rnpt: <https://linked.data.gov.au/def/road-name-part-types/>
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 
-        SELECT (CONCAT(STR(?road), "/", ?locality_code, "/", ?road_name) AS ?road_id) ?road_name ?road_name_suffix ?road_name_type ?locality_code ?road_cat_desc
+        SELECT (CONCAT(STR(?road), "/", ?locality_code, "/", UCASE(?_road_name)) AS ?road_id) (UCASE(?_road_name) as ?road_name) ?road_name_suffix ?road_name_type ?locality_code ?road_cat_desc
         WHERE {
-            GRAPH <urn:qali:graph:addresses> {
-                {% if iris %}
-                VALUES (?road ?locality_code ?_road_name) {
-                    {% for iri in iris %}
-                    (<{{ iri["road"] }}> "{{ iri["locality_code"] }}" "{{ iri["_road_name"] }}")
-                    {% endfor %}
-                }
-                {% endif %}
+            
+            {% if iris %}
+            VALUES (?road ?locality_code ?_road_name) {
+                {% for iri in iris %}
+                (<{{ iri["road"] }}> "{{ iri["locality_code"] }}" "{{ iri["_road_name"] }}")
+                {% endfor %}
+            }
+            {% endif %}
 
-                ?iri a addr:Address ;
-                sdo:hasPart [
-                        sdo:additionalType apt:road ;
-                    sdo:value ?road
-                ],
-                        [
-                        sdo:additionalType apt:locality ;
-                    sdo:value ?locality
-                ] .
+            GRAPH <urn:qali:graph:roads> {
+                ?road a roads:RoadName .
 
-                # Locality
-                GRAPH <urn:qali:graph:geographical-names> {
-                    ?locality sdo:additionalProperty [
-                            sdo:propertyID "lalf.locality_code" ;
-                        sdo:value ?locality_code
-                    ]
-                }
-
-                GRAPH <urn:qali:graph:roads> {
-                    # Road Name
+                # Road Suffix
+                OPTIONAL {
                     ?road sdo:hasPart [
-                            sdo:additionalType rnpt:roadGivenName ;
-                        sdo:value ?_road_name
+                            sdo:additionalType rnpt:roadSuffix ;
+                        sdo:value ?road_name_suffix_iri
                     ] .
-                    BIND(UCASE(?_road_name) as ?road_name)
 
-                    # Road Suffix
-                    OPTIONAL {
-                        ?road sdo:hasPart [
-                                sdo:additionalType rnpt:roadSuffix ;
-                            sdo:value ?road_name_suffix_iri
-                        ] .
-
-                        GRAPH ?vocab_graph {
-                            ?road_name_suffix_iri skos:notation ?road_name_suffix .
-                            FILTER(DATATYPE(?road_name_suffix) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
-                        }
+                    GRAPH ?vocab_graph {
+                        ?road_name_suffix_iri skos:notation ?road_name_suffix .
+                        FILTER(DATATYPE(?road_name_suffix) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
                     }
+                }
 
-                    # Road Type
-                    OPTIONAL {
-                        ?road sdo:hasPart [
-                                sdo:additionalType rnpt:roadType ;
-                            sdo:value ?road_name_type_iri
-                        ] .
+                # Road Type
+                OPTIONAL {
+                    ?road sdo:hasPart [
+                            sdo:additionalType rnpt:roadType ;
+                        sdo:value ?road_name_type_iri
+                    ] .
 
-                        GRAPH ?vocab_graph {
-                            ?road_name_type_iri skos:notation ?road_name_type
-                            FILTER(DATATYPE(?road_name_type) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
-                        }
+                    GRAPH ?vocab_graph {
+                        ?road_name_type_iri skos:notation ?road_name_type
+                        FILTER(DATATYPE(?road_name_type) = <https://linked.data.gov.au/dataset/qld-addr/datatype/sir-pub>)
                     }
                 }
             }

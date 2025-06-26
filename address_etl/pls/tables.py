@@ -510,24 +510,52 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching place name data")
-    query = place_name.get_query(settings.debug)
+    query = place_name.get_query_iris_only(debug=settings.debug)
     response = sparql_query(settings.sparql_endpoint, query, client)
 
-    rows = response.json()["results"]["bindings"]
-    logger.info(f"Found {len(rows)} place name rows")
-    for row in rows:
-        cursor.execute(
-            "INSERT INTO lf_place_name (place_name_id, pl_name_status_code, pl_name_type_code, pl_name, site_id) VALUES (?, ?, ?, ?, ?)",
-            (
-                row["place_name_id"]["value"],
-                row["pl_name_status_code"]["value"],
-                row["pl_name_type_code"]["value"],
-                row["pl_name"]["value"],
-                row["site_id"]["value"],
-            ),
-        )
+    iris = [
+        {
+            "parcel_id": row["parcel_id"]["value"],
+            "addr_iri": row["addr_iri"]["value"],
+        }
+        for row in response.json()["results"]["bindings"]
+    ]
+    total_iris = len(iris)
+    logger.info(f"Found {total_iris} place name ids")
 
-    cursor.connection.commit()
+    processed_count = 0
+    for i in range(0, total_iris, BATCH_SIZE):
+        batch_iris = iris[i : i + BATCH_SIZE]
+        batch_size = len(batch_iris)
+
+        try:
+            query = place_name.get_query(iris=batch_iris)
+            response = sparql_query(settings.sparql_endpoint, query, client)
+
+            rows = response.json()["results"]["bindings"]
+
+            for row in rows:
+                cursor.execute(
+                    "INSERT INTO lf_place_name (place_name_id, pl_name_status_code, pl_name_type_code, pl_name, site_id) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        row["place_name_id"]["value"],
+                        row["pl_name_status_code"]["value"],
+                        row["pl_name_type_code"]["value"],
+                        row["pl_name"]["value"],
+                        row["site_id"]["value"],
+                    ),
+                )
+
+            cursor.connection.commit()
+            processed_count += batch_size
+            logger.info(
+                f"Processed {processed_count} of {total_iris} place names (batch {i//BATCH_SIZE + 1})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            raise
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
