@@ -117,7 +117,13 @@ def create_road_tables(cursor: sqlite3.Cursor):
     )
 
     create_id_map_table("lf_road_id_map", cursor)
+
+
+def create_road_indexes(cursor: sqlite3.Cursor):
+    """Create indexes for road table after data insertion"""
+    logger.info("Creating road table indexes")
     cursor.execute("CREATE INDEX idx_lf_road_locality_code ON lf_road (locality_code)")
+    cursor.connection.commit()
 
 
 def create_parcel_tables(cursor: sqlite3.Cursor):
@@ -144,7 +150,13 @@ def create_parcel_tables(cursor: sqlite3.Cursor):
     )
 
     create_id_map_table("lf_parcel_id_map", cursor)
+
+
+def create_parcel_indexes(cursor: sqlite3.Cursor):
+    """Create indexes for parcel table after data insertion"""
+    logger.info("Creating parcel table indexes")
     cursor.execute("CREATE INDEX idx_lf_parcel_plan_lot ON lf_parcel(plan_no, lot_no)")
+    cursor.connection.commit()
 
 
 def create_site_tables(cursor: sqlite3.Cursor):
@@ -174,10 +186,16 @@ def create_site_tables(cursor: sqlite3.Cursor):
     )
 
     create_id_map_table("lf_site_id_map", cursor)
+
+
+def create_site_indexes(cursor: sqlite3.Cursor):
+    """Create indexes for site table after data insertion"""
+    logger.info("Creating site table indexes")
     cursor.execute("CREATE INDEX idx_lf_site_parcel_id ON lf_site (parcel_id)")
     cursor.execute(
         "CREATE INDEX idx_lf_site_parent_site_id ON lf_site (parent_site_id)"
     )
+    cursor.connection.commit()
 
 
 def create_place_name_tables(cursor: sqlite3.Cursor):
@@ -207,7 +225,13 @@ def create_place_name_tables(cursor: sqlite3.Cursor):
     )
 
     create_id_map_table("lf_place_name_id_map", cursor)
+
+
+def create_place_name_indexes(cursor: sqlite3.Cursor):
+    """Create indexes for place name table after data insertion"""
+    logger.info("Creating place name table indexes")
     cursor.execute("CREATE INDEX idx_lf_place_name_site_id ON lf_place_name (site_id)")
+    cursor.connection.commit()
 
 
 def create_geocode_tables(cursor: sqlite3.Cursor):
@@ -236,12 +260,17 @@ def create_geocode_tables(cursor: sqlite3.Cursor):
     """
     )
 
+
+def create_geocode_indexes(cursor: sqlite3.Cursor):
+    """Create indexes for geocode table after data insertion"""
+    logger.info("Creating geocode table indexes")
     cursor.execute(
         "CREATE INDEX idx_lf_geocode_sp_survey_point_address_pid ON lf_geocode_sp_survey_point (address_pid)"
     )
     cursor.execute(
         "CREATE INDEX idx_lf_geocode_sp_survey_point_site_id ON lf_geocode_sp_survey_point (site_id)"
     )
+    cursor.connection.commit()
 
 
 def create_address_tables(cursor: sqlite3.Cursor):
@@ -285,14 +314,19 @@ def create_address_tables(cursor: sqlite3.Cursor):
         """
     )
 
+    create_id_map_table("lf_address_id_map", cursor)
+
+
+def create_address_indexes(cursor: sqlite3.Cursor):
+    """Create indexes for address table after data insertion"""
+    logger.info("Creating address table indexes")
     cursor.execute(
         "CREATE INDEX idx_lf_address_address_pid ON lf_address (address_pid)"
     )
     cursor.execute("CREATE INDEX idx_lf_address_parcel_id ON lf_address (parcel_id)")
     cursor.execute("CREATE INDEX idx_lf_address_road_id ON lf_address (road_id)")
     cursor.execute("CREATE INDEX idx_lf_address_site_id ON lf_address (site_id)")
-
-    create_id_map_table("lf_address_id_map", cursor)
+    cursor.connection.commit()
 
 
 def create_tables(cursor: sqlite3.Cursor):
@@ -311,6 +345,7 @@ def create_tables(cursor: sqlite3.Cursor):
 def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching locality data")
+    optimize_sqlite_for_bulk_inserts(cursor)
 
     # local_auth table
     query = local_auth.get_query()
@@ -318,12 +353,12 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
     rows = response.json()["results"]["bindings"]
     logger.info(f"Found {len(rows)} local_auth rows")
-    for row in rows:
-        cursor.execute(
-            "INSERT INTO local_auth (la_code, la_name) VALUES (?, ?)",
-            (row["la_code"]["value"], row["lga_name"]["value"]),
-        )
 
+    insert_data = [(row["la_code"]["value"], row["lga_name"]["value"]) for row in rows]
+
+    cursor.executemany(
+        "INSERT INTO local_auth (la_code, la_name) VALUES (?, ?)", insert_data
+    )
     cursor.connection.commit()
 
     # locality table
@@ -332,26 +367,35 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
     rows = response.json()["results"]["bindings"]
     logger.info(f"Found {len(rows)} locality rows")
-    for row in rows:
-        cursor.execute(
-            "INSERT INTO locality (locality_code, locality_name, locality_type, la_code, state, status) VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                row["locality_code"]["value"],
-                row["locality_name"]["value"],
-                row["locality_type"]["value"],
-                row["la_code"]["value"],
-                row["state"]["value"],
-                row["status"]["value"],
-            ),
-        )
 
+    insert_data = [
+        (
+            row["locality_code"]["value"],
+            row["locality_name"]["value"],
+            row["locality_type"]["value"],
+            row["la_code"]["value"],
+            row["state"]["value"],
+            row["status"]["value"],
+        )
+        for row in rows
+    ]
+
+    cursor.executemany(
+        "INSERT INTO locality (locality_code, locality_name, locality_type, la_code, state, status) VALUES (?, ?, ?, ?, ?, ?)",
+        insert_data,
+    )
     cursor.connection.commit()
+
+    restore_sqlite_settings(cursor)
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
 def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching road data")
+    optimize_sqlite_for_bulk_inserts(cursor)
+
     query = road.get_query_iris_only(debug=settings.debug)
     response = sparql_query(settings.sparql_endpoint, query, client)
 
@@ -368,8 +412,10 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
     processed_count = 0
     seen_road_ids = set()
-    for i in range(0, total_iris, BATCH_SIZE):
-        batch_iris = iris[i : i + BATCH_SIZE]
+    optimized_batch_size = 10000
+
+    for i in range(0, total_iris, optimized_batch_size):
+        batch_iris = iris[i : i + optimized_batch_size]
         batch_size = len(batch_iris)
 
         try:
@@ -377,14 +423,11 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
             response = sparql_query(settings.sparql_endpoint, query, client)
             rows = response.json()["results"]["bindings"]
 
+            insert_data = []
             for row in rows:
-                try:
-                    if row["road_id"]["value"] in seen_road_ids:
-                        continue
+                if row["road_id"]["value"] not in seen_road_ids:
                     seen_road_ids.add(row["road_id"]["value"])
-
-                    cursor.execute(
-                        "INSERT INTO lf_road (road_id, road_name, road_name_suffix, road_name_type, locality_code, road_cat_desc) VALUES (?, ?, ?, ?, ?, ?)",
+                    insert_data.append(
                         (
                             row["road_id"]["value"],
                             row["road_name"]["value"],
@@ -392,30 +435,56 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
                             row.get("road_name_type", {}).get("value"),
                             row["locality_code"]["value"],
                             row["road_cat_desc"]["value"],
-                        ),
+                        )
                     )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to insert road {row['road_id']['value']}: {e}"
-                    )
-                    raise
 
-            cursor.connection.commit()
+            if insert_data:
+                cursor.executemany(
+                    "INSERT INTO lf_road (road_id, road_name, road_name_suffix, road_name_type, locality_code, road_cat_desc) VALUES (?, ?, ?, ?, ?, ?)",
+                    insert_data,
+                )
+
+            if (
+                i // optimized_batch_size + 1
+            ) % 5 == 0 or i + optimized_batch_size >= total_iris:
+                cursor.connection.commit()
+
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} roads (batch {i//BATCH_SIZE + 1})"
+                f"Processed {processed_count} of {total_iris} roads (batch {i//optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
             raise
 
+    restore_sqlite_settings(cursor)
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
+
+
+def optimize_sqlite_for_bulk_inserts(cursor: sqlite3.Cursor):
+    """Optimize SQLite settings for bulk insert operations"""
+    cursor.execute("PRAGMA foreign_keys = OFF")
+    cursor.execute("PRAGMA journal_mode = WAL")
+    cursor.execute("PRAGMA synchronous = NORMAL")
+    cursor.execute("PRAGMA cache_size = -64000")  # 64MB cache
+    cursor.execute("PRAGMA temp_store = MEMORY")
+    cursor.execute("PRAGMA mmap_size = 268435456")  # 256MB mmap
+
+
+def restore_sqlite_settings(cursor: sqlite3.Cursor):
+    """Restore normal SQLite settings after bulk operations"""
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("PRAGMA optimize")
+    cursor.connection.commit()
 
 
 def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching parcel data")
+    optimize_sqlite_for_bulk_inserts(cursor)
+
     query = parcel.get_query_iris_only(debug=settings.debug)
     response = sparql_query(settings.sparql_endpoint, query, client)
 
@@ -424,8 +493,10 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Found {total_iris} parcel iris rows")
 
     processed_count = 0
-    for i in range(0, total_iris, BATCH_SIZE):
-        batch_iris = iris[i : i + BATCH_SIZE]
+    optimized_batch_size = 10000
+
+    for i in range(0, total_iris, optimized_batch_size):
+        batch_iris = iris[i : i + optimized_batch_size]
         batch_size = len(batch_iris)
 
         try:
@@ -433,25 +504,35 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
             response = sparql_query(settings.sparql_endpoint, query, client)
             rows = response.json()["results"]["bindings"]
 
-            for row in rows:
-                cursor.execute(
-                    "INSERT INTO lf_parcel (parcel_id, plan_no, lot_no) VALUES (?, ?, ?)",
-                    (
-                        row["parcel_id"]["value"],
-                        row["plan_no"]["value"],
-                        row["lot_no"]["value"],
-                    ),
+            insert_data = [
+                (
+                    row["parcel_id"]["value"],
+                    row["plan_no"]["value"],
+                    row["lot_no"]["value"],
                 )
+                for row in rows
+            ]
 
-            cursor.connection.commit()
+            cursor.executemany(
+                "INSERT INTO lf_parcel (parcel_id, plan_no, lot_no) VALUES (?, ?, ?)",
+                insert_data,
+            )
+
+            if (
+                i // optimized_batch_size + 1
+            ) % 5 == 0 or i + optimized_batch_size >= total_iris:
+                cursor.connection.commit()
+
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} parcels (batch {i//BATCH_SIZE + 1})"
+                f"Processed {processed_count} of {total_iris} parcels (batch {i//optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
             raise
+
+    restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
@@ -459,6 +540,8 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching site data")
+    optimize_sqlite_for_bulk_inserts(cursor)
+
     query = site.get_query_iris_only(debug=settings.debug)
     response = sparql_query(settings.sparql_endpoint, query, client)
 
@@ -473,8 +556,10 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Found {total_iris} site ids")
 
     processed_count = 0
-    for i in range(0, total_iris, BATCH_SIZE):
-        batch_iris = iris[i : i + BATCH_SIZE]
+    optimized_batch_size = 10000
+
+    for i in range(0, total_iris, optimized_batch_size):
+        batch_iris = iris[i : i + optimized_batch_size]
         batch_size = len(batch_iris)
 
         try:
@@ -483,26 +568,36 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             rows = response.json()["results"]["bindings"]
 
-            for row in rows:
-                cursor.execute(
-                    "INSERT INTO lf_site (site_id, parent_site_id, site_type, parcel_id) VALUES (?, ?, ?, ?)",
-                    (
-                        row["site_id"]["value"],
-                        row.get("parent_site_id", {}).get("value"),
-                        row["site_type"]["value"],
-                        row["parcel_id"]["value"],
-                    ),
+            insert_data = [
+                (
+                    row["site_id"]["value"],
+                    row.get("parent_site_id", {}).get("value"),
+                    row["site_type"]["value"],
+                    row["parcel_id"]["value"],
                 )
+                for row in rows
+            ]
 
-            cursor.connection.commit()
+            cursor.executemany(
+                "INSERT INTO lf_site (site_id, parent_site_id, site_type, parcel_id) VALUES (?, ?, ?, ?)",
+                insert_data,
+            )
+
+            if (
+                i // optimized_batch_size + 1
+            ) % 5 == 0 or i + optimized_batch_size >= total_iris:
+                cursor.connection.commit()
+
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} sites (batch {i//BATCH_SIZE + 1})"
+                f"Processed {processed_count} of {total_iris} sites (batch {i//optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
             raise
+
+    restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
@@ -510,6 +605,9 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching place name data")
+
+    optimize_sqlite_for_bulk_inserts(cursor)
+
     query = place_name.get_query_iris_only(debug=settings.debug)
     response = sparql_query(settings.sparql_endpoint, query, client)
 
@@ -524,8 +622,10 @@ def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Found {total_iris} place name ids")
 
     processed_count = 0
-    for i in range(0, total_iris, BATCH_SIZE):
-        batch_iris = iris[i : i + BATCH_SIZE]
+    optimized_batch_size = 10000
+
+    for i in range(0, total_iris, optimized_batch_size):
+        batch_iris = iris[i : i + optimized_batch_size]
         batch_size = len(batch_iris)
 
         try:
@@ -534,27 +634,37 @@ def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             rows = response.json()["results"]["bindings"]
 
-            for row in rows:
-                cursor.execute(
-                    "INSERT INTO lf_place_name (place_name_id, pl_name_status_code, pl_name_type_code, pl_name, site_id) VALUES (?, ?, ?, ?, ?)",
-                    (
-                        row["place_name_id"]["value"],
-                        row["pl_name_status_code"]["value"],
-                        row["pl_name_type_code"]["value"],
-                        row["pl_name"]["value"],
-                        row["site_id"]["value"],
-                    ),
+            insert_data = [
+                (
+                    row["place_name_id"]["value"],
+                    row["pl_name_status_code"]["value"],
+                    row["pl_name_type_code"]["value"],
+                    row["pl_name"]["value"],
+                    row["site_id"]["value"],
                 )
+                for row in rows
+            ]
 
-            cursor.connection.commit()
+            cursor.executemany(
+                "INSERT INTO lf_place_name (place_name_id, pl_name_status_code, pl_name_type_code, pl_name, site_id) VALUES (?, ?, ?, ?, ?)",
+                insert_data,
+            )
+
+            if (
+                i // optimized_batch_size + 1
+            ) % 5 == 0 or i + optimized_batch_size >= total_iris:
+                cursor.connection.commit()
+
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} place names (batch {i//BATCH_SIZE + 1})"
+                f"Processed {processed_count} of {total_iris} place names (batch {i//optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
             raise
+
+    restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
@@ -562,6 +672,9 @@ def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Populating address table")
+
+    optimize_sqlite_for_bulk_inserts(cursor)
+
     query = address.get_query_iris_only(debug=settings.debug)
     response = sparql_query(settings.sparql_endpoint, query, client)
 
@@ -579,8 +692,10 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     logger.info(f"Found {total_iris} address ids")
 
     processed_count = 0
-    for i in range(0, total_iris, BATCH_SIZE):
-        batch_iris = iris[i : i + BATCH_SIZE]
+    optimized_batch_size = 5000
+
+    for i in range(0, total_iris, optimized_batch_size):
+        batch_iris = iris[i : i + optimized_batch_size]
         batch_size = len(batch_iris)
 
         try:
@@ -589,40 +704,50 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             rows = response.json()["results"]["bindings"]
 
-            for row in rows:
-                cursor.execute(
-                    "INSERT INTO lf_address (addr_id, address_pid, parcel_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        row["addr_id"]["value"],
-                        row["address_pid"]["value"],
-                        row["parcel_id"]["value"],
-                        row["addr_status_code"]["value"],
-                        row.get("unit_type", {}).get("value"),
-                        row.get("unit_no", {}).get("value"),
-                        row.get("unit_suffix", {}).get("value"),
-                        row.get("level_type", {}).get("value"),
-                        row.get("level_no", {}).get("value"),
-                        row.get("level_suffix", {}).get("value"),
-                        row.get("street_no_first", {}).get("value"),
-                        row.get("street_no_first_suffix", {}).get("value"),
-                        row.get("street_no_last", {}).get("value"),
-                        row.get("street_no_last_suffix", {}).get("value"),
-                        row["road_id"]["value"],
-                        row["site_id"]["value"],
-                        row.get("location_desc", {}).get("value"),
-                        row["address_standard"]["value"],
-                    ),
+            insert_data = [
+                (
+                    row["addr_id"]["value"],
+                    row["address_pid"]["value"],
+                    row["parcel_id"]["value"],
+                    row["addr_status_code"]["value"],
+                    row.get("unit_type", {}).get("value"),
+                    row.get("unit_no", {}).get("value"),
+                    row.get("unit_suffix", {}).get("value"),
+                    row.get("level_type", {}).get("value"),
+                    row.get("level_no", {}).get("value"),
+                    row.get("level_suffix", {}).get("value"),
+                    row.get("street_no_first", {}).get("value"),
+                    row.get("street_no_first_suffix", {}).get("value"),
+                    row.get("street_no_last", {}).get("value"),
+                    row.get("street_no_last_suffix", {}).get("value"),
+                    row["road_id"]["value"],
+                    row["site_id"]["value"],
+                    row.get("location_desc", {}).get("value"),
+                    row["address_standard"]["value"],
                 )
+                for row in rows
+            ]
 
-            cursor.connection.commit()
+            cursor.executemany(
+                "INSERT INTO lf_address (addr_id, address_pid, parcel_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                insert_data,
+            )
+
+            if (
+                i // optimized_batch_size + 1
+            ) % 5 == 0 or i + optimized_batch_size >= total_iris:
+                cursor.connection.commit()
+
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} addresses (batch {i//BATCH_SIZE + 1})"
+                f"Processed {processed_count} of {total_iris} addresses (batch {i//optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//BATCH_SIZE + 1}: {e}")
+            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
             raise
+
+    restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
@@ -630,61 +755,85 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 def update_geocode_site_id(cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Updating geocode table with site_id")
-    cursor.execute(
-        "UPDATE lf_geocode_sp_survey_point SET site_id = (SELECT site_id FROM lf_address WHERE lf_address.address_pid = lf_geocode_sp_survey_point.address_pid)"
-    )
 
-    # Create a new table with the foreign key constraint
+    optimize_sqlite_for_bulk_inserts(cursor)
+
+    logger.info("Creating temporary mapping table for geocode updates")
     cursor.execute(
         """
-        CREATE TABLE lf_geocode_sp_survey_point_new (
-            geocode_id TEXT PRIMARY KEY,
-            geocode_type TEXT CHECK (length(geocode_type) <= 4) NOT NULL,
-            address_pid TEXT NOT NULL,
-            site_id TEXT,
-            centoid_lat REAL NOT NULL,
-            centoid_lon REAL NOT NULL,
-            hash TEXT,
-            FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
+        CREATE TEMPORARY TABLE geocode_site_mapping AS
+        SELECT g.geocode_id, a.site_id
+        FROM lf_geocode_sp_survey_point g
+        JOIN lf_address a ON g.address_pid = a.address_pid
+    """
+    )
+
+    cursor.execute(
+        "CREATE INDEX idx_temp_geocode_id ON geocode_site_mapping (geocode_id)"
+    )
+
+    batch_size = 50000
+    total_updated = 0
+
+    while True:
+        cursor.execute(
+            f"""
+            UPDATE lf_geocode_sp_survey_point 
+            SET site_id = (
+                SELECT site_id 
+                FROM geocode_site_mapping 
+                WHERE geocode_site_mapping.geocode_id = lf_geocode_sp_survey_point.geocode_id
+            )
+            WHERE rowid IN (
+                SELECT g.rowid 
+                FROM lf_geocode_sp_survey_point g
+                LEFT JOIN geocode_site_mapping m ON g.geocode_id = m.geocode_id
+                WHERE m.site_id IS NOT NULL AND g.site_id IS NULL
+                LIMIT {batch_size}
+            )
+        """
         )
-    """
-    )
 
-    # Copy data from old table to new table, excluding NULL site_ids
-    cursor.execute(
-        """
-        INSERT INTO lf_geocode_sp_survey_point_new 
-        SELECT * FROM lf_geocode_sp_survey_point
-    """
-    )
+        rows_updated = cursor.rowcount
+        total_updated += rows_updated
 
-    # Drop the old table and rename the new one
-    cursor.execute("DROP TABLE lf_geocode_sp_survey_point")
-    cursor.execute(
-        "ALTER TABLE lf_geocode_sp_survey_point_new RENAME TO lf_geocode_sp_survey_point"
-    )
+        if rows_updated == 0:
+            break
 
-    # Recreate the indexes
-    cursor.execute(
-        "CREATE INDEX idx_lf_geocode_sp_survey_point_address_pid ON lf_geocode_sp_survey_point (address_pid)"
-    )
-    cursor.execute(
-        "CREATE INDEX idx_lf_geocode_sp_survey_point_site_id ON lf_geocode_sp_survey_point (site_id)"
-    )
+        cursor.connection.commit()
+        logger.info(f"Updated {total_updated} geocode records so far")
 
-    cursor.connection.commit()
+    # Clean up temporary table
+    cursor.execute("DROP TABLE geocode_site_mapping")
+
+    logger.info("Adding foreign key constraint to geocode table")
+    cursor.execute("PRAGMA foreign_key_check")
+
+    restore_sqlite_settings(cursor)
+
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
 def populate_tables(cursor: sqlite3.Cursor):
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         populate_locality_tables(client, cursor)
+        
         populate_road_tables(client, cursor)
+        create_road_indexes(cursor)
+        
         populate_parcel_tables(client, cursor)
+        create_parcel_indexes(cursor)
+        
         populate_site_tables(client, cursor)
-        populate_place_name_tables(client, cursor)
-        populate_address_tables(client, cursor)
+        create_site_indexes(cursor)
 
+        populate_place_name_tables(client, cursor)
+        create_place_name_indexes(cursor)
+
+        populate_address_tables(client, cursor)
+        create_address_indexes(cursor)
+
+        # This will create the geocode table's index as well
         update_geocode_site_id(cursor)
 
     text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)
