@@ -10,7 +10,7 @@ def get_query_iris_only(debug: bool = False):
         PREFIX cn: <https://linked.data.gov.au/def/cn/>
         PREFIX sdo: <https://schema.org/>
 
-        SELECT DISTINCT ?parcel_id ?address
+        SELECT ?parcel_id ?address
         WHERE {
             {% if debug %}
             VALUES ?parcel_id {

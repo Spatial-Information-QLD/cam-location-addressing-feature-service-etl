@@ -125,39 +125,40 @@ def main():
             import_geocodes(cursor, previous_etl_start_time, is_pls=True)
             populate_tables(cursor)
 
+            # NOTE: We no longer need to hash the rows in the table.
             # hash the rows in the table
-            hash_rows_in_table(
-                "addr_id", "hash", "lf_address", cursor, exclude_columns=("rowid",)
-            )
-            hash_rows_in_table(
-                "place_name_id",
-                "hash",
-                "lf_place_name",
-                cursor,
-                exclude_columns=("rowid",),
-            )
-            hash_rows_in_table(
-                "parcel_id", "hash", "lf_parcel", cursor, exclude_columns=("rowid",)
-            )
-            hash_rows_in_table(
-                "road_id", "hash", "lf_road", cursor, exclude_columns=("rowid",)
-            )
-            hash_rows_in_table(
-                "site_id", "hash", "lf_site", cursor, exclude_columns=("rowid",)
-            )
-            hash_rows_in_table(
-                "la_code", "hash", "local_auth", cursor, exclude_columns=("rowid",)
-            )
-            hash_rows_in_table(
-                "locality_code", "hash", "locality", cursor, exclude_columns=("rowid",)
-            )
-            hash_rows_in_table(
-                "geocode_id",
-                "hash",
-                "lf_geocode_sp_survey_point",
-                cursor,
-                exclude_columns=("rowid",),
-            )
+            # hash_rows_in_table(
+            #     "addr_id", "hash", "lf_address", cursor, exclude_columns=("rowid",)
+            # )
+            # hash_rows_in_table(
+            #     "place_name_id",
+            #     "hash",
+            #     "lf_place_name",
+            #     cursor,
+            #     exclude_columns=("rowid",),
+            # )
+            # hash_rows_in_table(
+            #     "parcel_id", "hash", "lf_parcel", cursor, exclude_columns=("rowid",)
+            # )
+            # hash_rows_in_table(
+            #     "road_id", "hash", "lf_road", cursor, exclude_columns=("rowid",)
+            # )
+            # hash_rows_in_table(
+            #     "site_id", "hash", "lf_site", cursor, exclude_columns=("rowid",)
+            # )
+            # hash_rows_in_table(
+            #     "la_code", "hash", "local_auth", cursor, exclude_columns=("rowid",)
+            # )
+            # hash_rows_in_table(
+            #     "locality_code", "hash", "locality", cursor, exclude_columns=("rowid",)
+            # )
+            # hash_rows_in_table(
+            #     "geocode_id",
+            #     "hash",
+            #     "lf_geocode_sp_survey_point",
+            #     cursor,
+            #     exclude_columns=("rowid",),
+            # )
 
             # NOTE: We no longer need to compute the diff and sync it with the Esri feature service.
             # compute_diff_and_sync(cursor, PREVIOUS_DB_PATH)
