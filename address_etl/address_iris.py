@@ -32,6 +32,13 @@ def address_iris_query(limit: int | None = None):
                             ?lifecycle_stage time:hasEnd ?end_time
                         }
                     }
+
+                    FILTER NOT EXISTS {
+                        GRAPH <urn:qali:graph:tags> {
+                            ?iri sdo:keywords ?private_tag .
+                            <urn:qali:tag-collection:private> skos:member ?private_tag .
+                        }
+                    }
                 }
                 GROUP BY ?iri
                 {% if limit %}
