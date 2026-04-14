@@ -1,23 +1,25 @@
-import csv
 import logging
 import sqlite3
 import time
 
 import httpx
 
-from address_etl.settings import settings
+from address_etl.crud import sparql_query
+from address_etl.id_map import text_to_id_for_pk
 from address_etl.pls.queries import (
+    address,
     local_auth,
     locality,
-    road,
     parcel,
-    site,
-    address,
     place_name,
+    road,
+    site,
 )
-from address_etl.id_map import text_to_id_for_pk
-from address_etl.tables import create_metadata_table
-from address_etl.crud import sparql_query
+from address_etl.settings import settings
+from address_etl.tables import (
+    create_geocode_type_code_table,
+    create_metadata_table,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -332,6 +334,7 @@ def create_address_indexes(cursor: sqlite3.Cursor):
 def create_tables(cursor: sqlite3.Cursor):
     cursor.execute("PRAGMA foreign_keys = ON")
     create_metadata_table(cursor)
+    create_geocode_type_code_table(cursor)
     create_locality_tables(cursor)
     create_road_tables(cursor)
     create_parcel_tables(cursor)

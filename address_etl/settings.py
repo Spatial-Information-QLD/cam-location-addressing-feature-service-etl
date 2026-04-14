@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     sparql_endpoint: str
+    geocode_type_sparql_endpoint: str = (
+        "https://icsm-api.qlocation.information.qld.gov.au/sparql"
+    )
     esri_username: str
     esri_password: str
 

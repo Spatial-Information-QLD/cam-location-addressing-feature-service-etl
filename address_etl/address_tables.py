@@ -8,7 +8,10 @@ from address_etl.address_concat import compute_address_concatenation
 from address_etl.address_iris import get_address_iris
 from address_etl.address_rows import get_address_rows
 from address_etl.settings import settings
-from address_etl.tables import create_metadata_table
+from address_etl.tables import (
+    create_geocode_type_code_table,
+    create_metadata_table,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +167,7 @@ def create_tables(cursor: sqlite3.Cursor):
     )
 
     create_metadata_table(cursor)
+    create_geocode_type_code_table(cursor)
 
     cursor.connection.commit()
 

@@ -6,21 +6,21 @@ from pathlib import Path
 
 import pytz
 
+from address_etl.address_tables import (
+    create_table_indexes,
+    create_tables,
+    populate_address_current_staging_table,
+    populate_address_current_table,
+)
 from address_etl.crud import delete_records_from_esri, insert_addresses_into_esri
+from address_etl.dynamodb_lock import get_lock, get_lock_table
 from address_etl.geocode import import_geocodes
+from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
 from address_etl.s3 import S3, download_file, get_latest_file, upload_file
 from address_etl.settings import settings
 from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.table_diff import compute_table_diff
 from address_etl.table_row_hash import hash_rows_in_table
-from address_etl.address_tables import (
-    create_table_indexes,
-    create_tables,
-    populate_address_current_table,
-    populate_address_current_staging_table,
-)
-from address_etl.dynamodb_lock import get_lock, get_lock_table
-from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
 from address_etl.time_convert import utc_to_brisbane_time
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,21 @@ def main():
                 # Load the previous ETL's geocodes into the geocode table.
                 cursor.execute("INSERT INTO geocode SELECT * FROM previous.geocode")
                 cursor.connection.commit()
+
+                cursor.execute(
+                    """
+                    SELECT name FROM previous.sqlite_master
+                    WHERE type = 'table' AND name = 'geocode_type_code'
+                    """
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        """
+                        INSERT INTO geocode_type_code
+                        SELECT * FROM previous.geocode_type_code
+                        """
+                    )
+                    cursor.connection.commit()
 
                 cursor.execute("DETACH DATABASE previous")
                 cursor.connection.commit()

@@ -17,6 +17,7 @@ def test_create_tables():
             ("address_current",),
             ("address_current_loaded",),
             ("metadata",),
+            ("geocode_type_code",),
         ]
     finally:
         connection.close()

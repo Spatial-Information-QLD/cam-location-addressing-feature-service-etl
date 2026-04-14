@@ -1,23 +1,20 @@
 import logging
-import time
 import sqlite3
-from pathlib import Path
+import time
 from datetime import datetime
-import pytz
+from pathlib import Path
 
 import boto3
+import pytz
 
-from address_etl.settings import settings
 from address_etl.dynamodb_lock import get_lock
-from address_etl.sqlite_dict_factory import dict_row_factory
-from address_etl.s3 import S3, get_latest_file, download_file
-from address_etl.pls.tables import create_tables, populate_tables
-from address_etl.time_convert import utc_to_brisbane_time
-from address_etl.metadata import metadata_write_start_time, metadata_write_end_time
-from address_etl.s3 import upload_file
 from address_etl.geocode import import_geocodes
-from address_etl.table_row_hash import hash_rows_in_table
-from address_etl.pls.diff_and_sync import compute_diff_and_sync
+from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
+from address_etl.pls.tables import create_tables, populate_tables
+from address_etl.s3 import S3, download_file, get_latest_file, upload_file
+from address_etl.settings import settings
+from address_etl.sqlite_dict_factory import dict_row_factory
+from address_etl.time_convert import utc_to_brisbane_time
 
 PREVIOUS_DB_PATH = "/tmp/pls_previous.db"
 S3_FILE_PREFIX_KEY = "pls-etl/"
@@ -115,6 +112,21 @@ def main():
                         f"""
                         INSERT INTO {table}
                         SELECT * FROM previous.{table}
+                        """
+                    )
+                    cursor.connection.commit()
+
+                cursor.execute(
+                    """
+                    SELECT name FROM previous.sqlite_master
+                    WHERE type = 'table' AND name = 'geocode_type_code'
+                    """
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        """
+                        INSERT INTO geocode_type_code
+                        SELECT * FROM previous.geocode_type_code
                         """
                     )
                     cursor.connection.commit()
