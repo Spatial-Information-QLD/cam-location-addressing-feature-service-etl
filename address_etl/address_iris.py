@@ -17,6 +17,7 @@ def address_iris_query(limit: int | None = None):
                 PREFIX addr: <https://linked.data.gov.au/def/addr/>
                 PREFIX lc: <https://linked.data.gov.au/def/lifecycle/>
                 PREFIX sdo: <https://schema.org/>
+                PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
                 PREFIX time: <http://www.w3.org/2006/time#>
 
                 SELECT ?iri (MAX(?_start_time) AS ?start_time)
