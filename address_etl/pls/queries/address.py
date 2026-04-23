@@ -2,6 +2,8 @@ from textwrap import dedent
 
 from jinja2 import Template
 
+from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
+
 
 def get_query_iris_only(debug: bool = False):
     return Template(
@@ -10,36 +12,54 @@ def get_query_iris_only(debug: bool = False):
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
         PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
         PREFIX cn: <https://linked.data.gov.au/def/cn/>
+        PREFIX lc: <https://linked.data.gov.au/def/lifecycle/>
         PREFIX rnpt: <https://linked.data.gov.au/def/road-name-part-types/>
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        PREFIX time: <http://www.w3.org/2006/time#>
 
         SELECT DISTINCT ?addr_iri ?parcel_id ?road ?locality_code ?_road_name
         WHERE {
             {% if debug %}
             VALUES ?parcel_id {
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/59SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/58SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/57SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217150>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217150>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/0SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/235RP33643>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP101578>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2RP141728>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/41SP317569>
+                {% for parcel_iri in DEBUG_PARCEL_IRIS %}
+                <{{ parcel_iri }}>
+                {% endfor %}
             }
             {% endif %}
+
+            {
+                SELECT ?addr_iri (MAX(?_start_time) AS ?latest_start_time)
+                WHERE {
+                    GRAPH <urn:qali:graph:addresses> {
+                        ?addr_iri a addr:Address ;
+                            lc:hasLifecycleStage ?lifecycle_stage .
+
+                        ?lifecycle_stage sdo:additionalType ?lifecycle_stage_type ;
+                            time:hasBeginning/time:inXSDDateTime ?_start_time .
+
+                        FILTER NOT EXISTS {
+                            ?lifecycle_stage time:hasEnd ?end_time
+                        }
+                    }
+                }
+                GROUP BY ?addr_iri
+            }
 
             GRAPH <urn:qali:graph:addresses> {
                 ?parcel_id a addr:AddressableObject ;
                     cn:hasName ?addr_iri .
                 
-                ?addr_iri a addr:Address .
+                ?addr_iri a addr:Address ;
+                    lc:hasLifecycleStage ?latest_lifecycle_stage .
+
+                ?latest_lifecycle_stage
+                    sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> ;
+                    time:hasBeginning/time:inXSDDateTime ?latest_start_time .
+
+                FILTER NOT EXISTS {
+                    ?latest_lifecycle_stage time:hasEnd ?end_time
+                }
 
                 # Road
                 ?addr_iri sdo:hasPart [
@@ -67,10 +87,17 @@ def get_query_iris_only(debug: bool = False):
                     ] .
                 }
             }
+
+            FILTER NOT EXISTS {
+                GRAPH <urn:qali:graph:tags> {
+                    ?addr_iri sdo:keywords ?private_tag .
+                    <urn:qali:tag-collection:private> skos:member ?private_tag .
+                }
+            }
         }
         """
         )
-    ).render(debug=debug)
+    ).render(debug=debug, DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS)
 
 
 def get_query(iris: list = None):
@@ -80,14 +107,16 @@ def get_query(iris: list = None):
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
         PREFIX apt: <https://linked.data.gov.au/def/addr-part-types/>
         PREFIX cn: <https://linked.data.gov.au/def/cn/>
+        PREFIX lc: <https://linked.data.gov.au/def/lifecycle/>
         PREFIX rnpt: <https://linked.data.gov.au/def/road-name-part-types/>
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        PREFIX time: <http://www.w3.org/2006/time#>
 
         SELECT
+            ?addr_iri
             ?parcel_id
             ?addr_id
-            ?address_pid
             ?addr_status_code
             ?unit_type
             ?unit_no
@@ -112,14 +141,47 @@ def get_query(iris: list = None):
             }
             {% endif %}
 
+            {
+                SELECT ?addr_iri (MAX(?_start_time) AS ?latest_start_time)
+                WHERE {
+                    {% if iris %}
+                    VALUES ?addr_iri {
+                        {% for iri in iris %}
+                        <{{ iri["addr_iri"] }}>
+                        {% endfor %}
+                    }
+                    {% endif %}
+
+                    GRAPH <urn:qali:graph:addresses> {
+                        ?addr_iri a addr:Address ;
+                            lc:hasLifecycleStage ?lifecycle_stage .
+
+                        ?lifecycle_stage sdo:additionalType ?lifecycle_stage_type ;
+                            time:hasBeginning/time:inXSDDateTime ?_start_time .
+
+                        FILTER NOT EXISTS {
+                            ?lifecycle_stage time:hasEnd ?end_time
+                        }
+                    }
+                }
+                GROUP BY ?addr_iri
+            }
+
             GRAPH <urn:qali:graph:addresses> {
                 ?parcel_id a addr:AddressableObject ;
                     cn:hasName ?addr_iri .
 
                 ?addr_iri a addr:Address ;
-                    sdo:identifier ?address_pid ;
-                    addr:hasStatus ?addr_status .
-                FILTER(DATATYPE(?address_pid) = <https://linked.data.gov.au/dataset/qld-addr/datatype/address-pid>)
+                    addr:hasStatus ?addr_status ;
+                    lc:hasLifecycleStage ?latest_lifecycle_stage .
+
+                ?latest_lifecycle_stage
+                    sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> ;
+                    time:hasBeginning/time:inXSDDateTime ?latest_start_time .
+
+                FILTER NOT EXISTS {
+                    ?latest_lifecycle_stage time:hasEnd ?end_time
+                }
 
                 # addr status code
                 GRAPH ?addr_status_vocab_graph {
@@ -264,6 +326,13 @@ def get_query(iris: list = None):
 
                 # addr id
                 BIND(CONCAT(STR(?addr_iri), "/", ?road_id, "/", STR(?parcel_id)) AS ?addr_id)
+            }
+
+            FILTER NOT EXISTS {
+                GRAPH <urn:qali:graph:tags> {
+                    ?addr_iri sdo:keywords ?private_tag .
+                    <urn:qali:tag-collection:private> skos:member ?private_tag .
+                }
             }
         }
         """

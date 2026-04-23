@@ -1,6 +1,6 @@
-import time
-import sqlite3
 import logging
+import sqlite3
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def text_to_id_for_pk(
 
     for offset in range(0, total_rows, batch_size):
         logger.info(
-            f"Processing batch {offset//batch_size + 1} of {(total_rows + batch_size - 1)//batch_size}"
+            f"Processing batch {offset // batch_size + 1} of {(total_rows + batch_size - 1) // batch_size}"
         )
 
         query = f"""
@@ -76,7 +76,7 @@ def text_to_id_for_pk(
                 FROM {map_table_name} 
                 WHERE iri = {table_name}.{pk_column_name}
             )
-            WHERE {table_name}.rowid IN ({', '.join(str(row["rowid"]) for row in results[offset:offset+batch_size])})
+            WHERE {table_name}.rowid IN ({", ".join(str(row["rowid"]) for row in results[offset : offset + batch_size])})
         """
         cursor.execute(query)
         cursor.connection.commit()
@@ -89,7 +89,6 @@ def text_to_id_for_pk_migrate_column(
     pk_column_name: str,
     cursor: sqlite3.Cursor,
 ):
-
     # Get all existing indexes before dropping the table
     logger.info(f"Getting existing indexes for {table_name}")
     cursor.execute(
@@ -107,8 +106,8 @@ def text_to_id_for_pk_migrate_column(
     cursor.execute(
         f"""
         CREATE TABLE {table_name}_new (
-            {pk_column_name} INTEGER{' PRIMARY KEY' if pk_info and pk_info['name'] == pk_column_name else ''},
-            {', '.join(f"{col['name']} {col['type']}" for col in table_info if col['name'] != pk_column_name)}
+            {pk_column_name} INTEGER{" PRIMARY KEY" if pk_info and pk_info["name"] == pk_column_name else ""},
+            {", ".join(f"{col['name']} {col['type']}" for col in table_info if col["name"] != pk_column_name)}
         )
         """
     )

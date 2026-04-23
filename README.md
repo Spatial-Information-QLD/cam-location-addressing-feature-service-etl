@@ -1,21 +1,21 @@
-# Location Address Esri Feature Service ETL
+# PLS ETL
 
-This repository contains the code for the Location Address Esri Feature Service ETL.
+This repository contains the PLS ETL.
 
-It is designed to pull address data from QALI via a SPARQL endpoint, generate the location address flat table, find the difference between the previous ETL run and the current ETL run, and update the Esri feature service with the changes.
+The ETL pulls source data from QALI via SPARQL, imports geocodes and cached address PID mappings from ESRI, builds the PLS SQLite dataset, and uploads the resulting database snapshot to S3.
 
 ## Development
 
-To run locally, see the [.env-template file](.env-template) and the [address_etl/settings.py file](address_etl/settings.py) to see what needs to be set.
+See [.env-template](.env-template) and [address_etl/settings.py](address_etl/settings.py) for the supported runtime configuration.
 
-See the `dev` command in the [Taskfile](Taskfile.yml) to run the ETL locally.
+Run the ETL locally with the `dev` task in [Taskfile.yml](Taskfile.yml).
 
 ## Release
 
 Releases are managed with GitHub Actions.
 
-When a release is created, the GitHub Action will build the Docker image and push it to GitHub Container Registry.
+When a release is created, GitHub Actions builds the Docker image and pushes it to GitHub Container Registry.
 
-This container image is pulled into ECS Fargate and run as a task. The ETL is triggered by AWS EventBridge on a cron schedule.
+The container image is then run as an ECS Fargate task and triggered by AWS EventBridge on a cron schedule.
 
 Actual AWS resource deployment is managed in Terraform.

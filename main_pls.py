@@ -1,23 +1,25 @@
 import logging
-import time
 import sqlite3
-from pathlib import Path
+import time
 from datetime import datetime
-import pytz
+from pathlib import Path
 
 import boto3
+import pytz
 
-from address_etl.settings import settings
+from address_etl.address_iri_pid_map import import_address_pid_mappings
 from address_etl.dynamodb_lock import get_lock
-from address_etl.sqlite_dict_factory import dict_row_factory
-from address_etl.s3 import S3, get_latest_file, download_file
-from address_etl.pls.tables import create_tables, populate_tables
-from address_etl.time_convert import utc_to_brisbane_time
-from address_etl.metadata import metadata_write_start_time, metadata_write_end_time
-from address_etl.s3 import upload_file
 from address_etl.geocode import import_geocodes
-from address_etl.table_row_hash import hash_rows_in_table
-from address_etl.pls.diff_and_sync import compute_diff_and_sync
+from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
+from address_etl.pls.tables import (
+    create_tables,
+    populate_tables,
+    prune_geocodes_without_addresses,
+)
+from address_etl.s3 import S3, download_file, get_latest_file, upload_file
+from address_etl.settings import settings
+from address_etl.sqlite_dict_factory import dict_row_factory
+from address_etl.time_convert import utc_to_brisbane_time
 
 PREVIOUS_DB_PATH = "/tmp/pls_previous.db"
 S3_FILE_PREFIX_KEY = "pls-etl/"
@@ -79,7 +81,7 @@ def main():
                 cursor.execute("ATTACH DATABASE ? AS previous", (PREVIOUS_DB_PATH,))
 
                 # Get the previous ETL's start time from the metadata table.
-                cursor.execute("SELECT start_time FROM metadata")
+                cursor.execute("SELECT start_time FROM previous.metadata")
                 previous_etl_start_time = datetime.fromisoformat(
                     cursor.fetchone()["start_time"]
                 )
@@ -119,49 +121,43 @@ def main():
                     )
                     cursor.connection.commit()
 
+                cursor.execute(
+                    """
+                    SELECT name FROM previous.sqlite_master
+                    WHERE type = 'table' AND name = 'geocode_type_code'
+                    """
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        """
+                        INSERT INTO geocode_type_code
+                        SELECT * FROM previous.geocode_type_code
+                        """
+                    )
+                    cursor.connection.commit()
+
+                cursor.execute(
+                    """
+                    SELECT name FROM previous.sqlite_master
+                    WHERE type = 'table' AND name = 'address_iri_pid_map'
+                    """
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        """
+                        INSERT INTO address_iri_pid_map
+                        SELECT * FROM previous.address_iri_pid_map
+                        """
+                    )
+                    cursor.connection.commit()
+
                 cursor.execute("DETACH DATABASE previous")
                 cursor.connection.commit()
 
-            import_geocodes(cursor, previous_etl_start_time, is_pls=True)
+            import_address_pid_mappings(cursor, previous_etl_start_time)
+            import_geocodes(cursor, previous_etl_start_time)
             populate_tables(cursor)
-
-            # NOTE: We no longer need to hash the rows in the table.
-            # hash the rows in the table
-            # hash_rows_in_table(
-            #     "addr_id", "hash", "lf_address", cursor, exclude_columns=("rowid",)
-            # )
-            # hash_rows_in_table(
-            #     "place_name_id",
-            #     "hash",
-            #     "lf_place_name",
-            #     cursor,
-            #     exclude_columns=("rowid",),
-            # )
-            # hash_rows_in_table(
-            #     "parcel_id", "hash", "lf_parcel", cursor, exclude_columns=("rowid",)
-            # )
-            # hash_rows_in_table(
-            #     "road_id", "hash", "lf_road", cursor, exclude_columns=("rowid",)
-            # )
-            # hash_rows_in_table(
-            #     "site_id", "hash", "lf_site", cursor, exclude_columns=("rowid",)
-            # )
-            # hash_rows_in_table(
-            #     "la_code", "hash", "local_auth", cursor, exclude_columns=("rowid",)
-            # )
-            # hash_rows_in_table(
-            #     "locality_code", "hash", "locality", cursor, exclude_columns=("rowid",)
-            # )
-            # hash_rows_in_table(
-            #     "geocode_id",
-            #     "hash",
-            #     "lf_geocode_sp_survey_point",
-            #     cursor,
-            #     exclude_columns=("rowid",),
-            # )
-
-            # NOTE: We no longer need to compute the diff and sync it with the Esri feature service.
-            # compute_diff_and_sync(cursor, PREVIOUS_DB_PATH)
+            prune_geocodes_without_addresses(cursor)
 
             current_datetime = datetime.now(pytz.UTC)
             brisbane_time = utc_to_brisbane_time(current_datetime)

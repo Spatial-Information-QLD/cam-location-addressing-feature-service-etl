@@ -5,6 +5,25 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+def _raise_for_missing_key(
+    response: httpx.Response,
+    payload: dict,
+    missing_key: str,
+    context: str,
+) -> None:
+    error = payload.get("error")
+    if error:
+        details = "; ".join(error.get("details", []))
+        raise RuntimeError(
+            f"{context}: ESRI error {error.get('code')}: {error.get('message')}"
+            + (f" ({details})" if details else "")
+        )
+
+    raise RuntimeError(
+        f"{context}: expected '{missing_key}' in ESRI response, got: {response.text[:1000]}"
+    )
+
+
 def get_esri_token(
     esri_auth_url: str,
     referer: str,
@@ -23,7 +42,13 @@ def get_esri_token(
     response = client.post(esri_auth_url, params=params, data=data)
     try:
         response.raise_for_status()
-        return response.json()["token"]
+        payload = response.json()
+        token = payload.get("token")
+        if token is None:
+            _raise_for_missing_key(
+                response, payload, "token", "Error getting ESRI token"
+            )
+        return token
     except Exception as e:
         logger.error(f"Error getting ESRI token: {response.text}")
         raise e
@@ -43,7 +68,13 @@ def get_total_count(
     response = client.get(esri_url, params=params)
     try:
         response.raise_for_status()
-        return int(response.json()["count"])
+        payload = response.json()
+        count = payload.get("count")
+        if count is None:
+            _raise_for_missing_key(
+                response, payload, "count", "Error getting total count"
+            )
+        return int(count)
     except Exception as e:
         logger.error(f"Error getting total count: {response.text}")
         raise e
@@ -67,7 +98,13 @@ def get_count(
     response = client.post(esri_url, data=params)
     try:
         response.raise_for_status()
-        return int(response.json()["count"])
+        payload = response.json()
+        count = payload.get("count")
+        if count is None:
+            _raise_for_missing_key(
+                response, payload, "count", "Error getting records count"
+            )
+        return int(count)
     except Exception as e:
         logger.error(
             f"Error getting records count ({response.status_code}): {response.text[:1000]}"

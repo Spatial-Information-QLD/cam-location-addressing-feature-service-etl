@@ -1,5 +1,8 @@
 from textwrap import dedent
+
 from jinja2 import Template
+
+from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
 
 
 def get_query_iris_only(debug: bool = False):
@@ -14,20 +17,9 @@ def get_query_iris_only(debug: bool = False):
         WHERE {
             {% if debug %}
             VALUES ?parcel_id {
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/59SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/58SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/57SP217152>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217150>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217150>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/0SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP217149>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/17SP217147>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/16SP217147>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/235RP33643>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/1SP101578>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/2RP141728>
-                <https://linked.data.gov.au/dataset/qld-addr/parcel/41SP317569>
+                {% for parcel_iri in DEBUG_PARCEL_IRIS %}
+                <{{ parcel_iri }}>
+                {% endfor %}
             }
             {% endif %}
 
@@ -40,7 +32,7 @@ def get_query_iris_only(debug: bool = False):
         }
         """
         )
-    ).render(debug=debug)
+    ).render(debug=debug, DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS)
 
 
 def get_query(iris: list = None):

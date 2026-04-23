@@ -12,7 +12,7 @@ tasks:
     silent: true
 
   dev:
-    cmd: uv run main.py
+    cmd: uv run main_pls.py
 
   format:
     desc: Format Python code.
@@ -33,15 +33,15 @@ tasks:
       - uv run pytest -rP
 
   docker:build:
-    cmd: docker build -t address-etl .
+    cmd: docker build -t pls-etl .
 
   docker:run:
-    cmd: docker run --rm --network host --env-file .env address-etl
+    cmd: docker run --rm --network host --env-file .env pls-etl
 
   minio:create-bucket:
     cmds:
       - docker compose exec minio mc alias set local http://localhost:9000 minioadmin minioadmin
-      - docker compose exec minio mc mb local/location-addressing-feature-service-etl
+      - docker compose exec minio mc mb local/pls-feature-service-etl
 
   localstack:create-table:
     cmd: |
