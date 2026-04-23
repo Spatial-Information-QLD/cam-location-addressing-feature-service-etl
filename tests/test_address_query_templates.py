@@ -1,3 +1,4 @@
+from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
 from address_etl.pls.queries import address
 
 
@@ -39,3 +40,7 @@ def test_get_query_filters_to_current_non_private_addresses():
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
     assert "?address_pid" not in query
+
+
+def test_debug_parcel_iris_list_has_expected_size():
+    assert len(DEBUG_PARCEL_IRIS) == 100
