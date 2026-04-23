@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import logging
 import sqlite3
 import time
@@ -6,6 +7,7 @@ import httpx
 
 from address_etl.crud import sparql_query
 from address_etl.id_map import text_to_id_for_pk
+from address_etl.address_iri_pid_map import load_address_pid_mappings
 from address_etl.pls.queries import (
     address,
     local_auth,
@@ -17,6 +19,7 @@ from address_etl.pls.queries import (
 )
 from address_etl.settings import settings
 from address_etl.tables import (
+    create_address_iri_pid_map_table,
     create_geocode_type_code_table,
     create_metadata_table,
 )
@@ -335,6 +338,7 @@ def create_tables(cursor: sqlite3.Cursor):
     cursor.execute("PRAGMA foreign_keys = ON")
     create_metadata_table(cursor)
     create_geocode_type_code_table(cursor)
+    create_address_iri_pid_map_table(cursor)
     create_locality_tables(cursor)
     create_road_tables(cursor)
     create_parcel_tables(cursor)
@@ -711,30 +715,8 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
             response = sparql_query(settings.sparql_endpoint, query, client)
 
             rows = response.json()["results"]["bindings"]
-
-            insert_data = [
-                (
-                    row["addr_id"]["value"],
-                    row["address_pid"]["value"],
-                    row["parcel_id"]["value"],
-                    row["addr_status_code"]["value"],
-                    row.get("unit_type", {}).get("value"),
-                    row.get("unit_no", {}).get("value"),
-                    row.get("unit_suffix", {}).get("value"),
-                    row.get("level_type", {}).get("value"),
-                    row.get("level_no", {}).get("value"),
-                    row.get("level_suffix", {}).get("value"),
-                    row.get("street_no_first", {}).get("value"),
-                    row.get("street_no_first_suffix", {}).get("value"),
-                    row.get("street_no_last", {}).get("value"),
-                    row.get("street_no_last_suffix", {}).get("value"),
-                    row["road_id"]["value"],
-                    row["site_id"]["value"],
-                    row.get("location_desc", {}).get("value"),
-                    row["address_standard"]["value"],
-                )
-                for row in rows
-            ]
+            address_pid_lookup = load_address_pid_mappings_for_rows(rows, cursor)
+            insert_data, missing_iris = build_address_insert_data(rows, address_pid_lookup)
 
             cursor.executemany(
                 "INSERT INTO lf_address (addr_id, address_pid, parcel_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -750,6 +732,13 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
             logger.info(
                 f"Processed {processed_count} of {total_iris} addresses (batch {i//optimized_batch_size + 1})"
             )
+            if missing_iris:
+                logger.warning(
+                    "Skipped %s addresses in batch %s because no address PID mapping was found. Sample IRIs: %s",
+                    len(missing_iris),
+                    i // optimized_batch_size + 1,
+                    ", ".join(missing_iris[:5]),
+                )
 
         except Exception as e:
             logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
@@ -758,6 +747,75 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
+
+
+def load_address_pid_mappings_for_rows(
+    rows: list[dict[str, dict[str, str]]], cursor: sqlite3.Cursor
+) -> dict[str, str]:
+    address_iris = sorted(
+        {
+            row["addr_iri"]["value"]
+            for row in rows
+            if row.get("addr_iri", {}).get("value")
+        }
+    )
+    return load_address_pid_mappings(cursor, address_iris)
+
+
+def build_address_insert_data(
+    rows: Iterable[dict[str, dict[str, str]]],
+    address_pid_lookup: dict[str, str],
+) -> tuple[list[tuple[str | None, ...]], list[str]]:
+    insert_data: list[tuple[str | None, ...]] = []
+    missing_iris: list[str] = []
+
+    for row in rows:
+        addr_iri = row["addr_iri"]["value"]
+        address_pid = address_pid_lookup.get(addr_iri)
+        if address_pid is None:
+            missing_iris.append(addr_iri)
+            continue
+
+        insert_data.append(
+            (
+                row["addr_id"]["value"],
+                address_pid,
+                row["parcel_id"]["value"],
+                row["addr_status_code"]["value"],
+                row.get("unit_type", {}).get("value"),
+                row.get("unit_no", {}).get("value"),
+                row.get("unit_suffix", {}).get("value"),
+                row.get("level_type", {}).get("value"),
+                row.get("level_no", {}).get("value"),
+                row.get("level_suffix", {}).get("value"),
+                row.get("street_no_first", {}).get("value"),
+                row.get("street_no_first_suffix", {}).get("value"),
+                row.get("street_no_last", {}).get("value"),
+                row.get("street_no_last_suffix", {}).get("value"),
+                row["road_id"]["value"],
+                row["site_id"]["value"],
+                row.get("location_desc", {}).get("value"),
+                row["address_standard"]["value"],
+            )
+        )
+
+    return insert_data, missing_iris
+
+
+def prune_addresses_without_pid_mapping(cursor: sqlite3.Cursor) -> None:
+    logger.info("Pruning addresses without address IRI to PID mappings")
+    cursor.execute(
+        """
+        DELETE FROM lf_address
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM address_iri_pid_map m
+            WHERE m.address_pid = lf_address.address_pid
+        )
+        """
+    )
+    logger.info("Pruned %s address rows without a PID mapping", cursor.rowcount)
+    cursor.connection.commit()
 
 
 def update_geocode_site_id(cursor: sqlite3.Cursor):
@@ -822,6 +880,22 @@ def update_geocode_site_id(cursor: sqlite3.Cursor):
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
 
 
+def prune_geocodes_without_addresses(cursor: sqlite3.Cursor) -> None:
+    logger.info("Pruning geocodes without matching addresses")
+    cursor.execute(
+        """
+        DELETE FROM lf_geocode_sp_survey_point
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM lf_address a
+            WHERE a.address_pid = lf_geocode_sp_survey_point.address_pid
+        )
+        """
+    )
+    logger.info("Pruned %s geocode rows without matching addresses", cursor.rowcount)
+    cursor.connection.commit()
+
+
 def populate_tables(cursor: sqlite3.Cursor):
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         populate_locality_tables(client, cursor)
@@ -840,6 +914,7 @@ def populate_tables(cursor: sqlite3.Cursor):
 
         populate_address_tables(client, cursor)
         create_address_indexes(cursor)
+        prune_addresses_without_pid_mapping(cursor)
 
         # # This will create the geocode table's index as well
         update_geocode_site_id(cursor)

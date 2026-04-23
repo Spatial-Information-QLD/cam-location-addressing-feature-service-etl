@@ -39,3 +39,23 @@ def create_geocode_type_code_table(cursor: sqlite3.Cursor):
     """
     )
     cursor.connection.commit()
+
+
+def create_address_iri_pid_map_table(cursor: sqlite3.Cursor):
+    """Create the persisted address IRI to PID cache table."""
+    logger.info("Creating address_iri_pid_map table")
+    cursor.execute(
+        """
+        CREATE TABLE address_iri_pid_map (
+            address_iri TEXT PRIMARY KEY,
+            address_pid TEXT NOT NULL
+        )
+    """
+    )
+    cursor.execute(
+        """
+        CREATE INDEX idx_address_iri_pid_map_address_pid
+        ON address_iri_pid_map (address_pid)
+        """
+    )
+    cursor.connection.commit()

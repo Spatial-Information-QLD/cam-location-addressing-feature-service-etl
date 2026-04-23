@@ -7,10 +7,15 @@ from pathlib import Path
 import boto3
 import pytz
 
+from address_etl.address_iri_pid_map import import_address_pid_mappings
 from address_etl.dynamodb_lock import get_lock
 from address_etl.geocode import import_geocodes
 from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
-from address_etl.pls.tables import create_tables, populate_tables
+from address_etl.pls.tables import (
+    create_tables,
+    populate_tables,
+    prune_geocodes_without_addresses,
+)
 from address_etl.s3 import S3, download_file, get_latest_file, upload_file
 from address_etl.settings import settings
 from address_etl.sqlite_dict_factory import dict_row_factory
@@ -76,7 +81,7 @@ def main():
                 cursor.execute("ATTACH DATABASE ? AS previous", (PREVIOUS_DB_PATH,))
 
                 # Get the previous ETL's start time from the metadata table.
-                cursor.execute("SELECT start_time FROM metadata")
+                cursor.execute("SELECT start_time FROM previous.metadata")
                 previous_etl_start_time = datetime.fromisoformat(
                     cursor.fetchone()["start_time"]
                 )
@@ -131,11 +136,28 @@ def main():
                     )
                     cursor.connection.commit()
 
+                cursor.execute(
+                    """
+                    SELECT name FROM previous.sqlite_master
+                    WHERE type = 'table' AND name = 'address_iri_pid_map'
+                    """
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        """
+                        INSERT INTO address_iri_pid_map
+                        SELECT * FROM previous.address_iri_pid_map
+                        """
+                    )
+                    cursor.connection.commit()
+
                 cursor.execute("DETACH DATABASE previous")
                 cursor.connection.commit()
 
+            import_address_pid_mappings(cursor, previous_etl_start_time)
             import_geocodes(cursor, previous_etl_start_time, is_pls=True)
             populate_tables(cursor)
+            prune_geocodes_without_addresses(cursor)
 
             # NOTE: We no longer need to hash the rows in the table.
             # hash the rows in the table

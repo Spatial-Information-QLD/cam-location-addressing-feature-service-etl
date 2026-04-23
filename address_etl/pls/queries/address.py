@@ -123,9 +123,9 @@ def get_query(iris: list = None):
         PREFIX time: <http://www.w3.org/2006/time#>
 
         SELECT
+            ?addr_iri
             ?parcel_id
             ?addr_id
-            ?address_pid
             ?addr_status_code
             ?unit_type
             ?unit_no
@@ -181,10 +181,8 @@ def get_query(iris: list = None):
                     cn:hasName ?addr_iri .
 
                 ?addr_iri a addr:Address ;
-                    sdo:identifier ?address_pid ;
                     addr:hasStatus ?addr_status ;
                     lc:hasLifecycleStage ?latest_lifecycle_stage .
-                FILTER(DATATYPE(?address_pid) = <https://linked.data.gov.au/dataset/qld-addr/datatype/address-pid>)
 
                 ?latest_lifecycle_stage
                     sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> ;

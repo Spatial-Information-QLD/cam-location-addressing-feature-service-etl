@@ -38,3 +38,4 @@ def test_get_query_filters_to_current_non_private_addresses():
     assert "lc:hasLifecycleStage ?latest_lifecycle_stage" in query
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
+    assert "?address_pid" not in query

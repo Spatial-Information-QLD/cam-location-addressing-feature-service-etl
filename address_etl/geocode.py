@@ -188,28 +188,15 @@ def build_geocode_where_clause(
     schema: GeocodeLayerSchema,
     esri_date: str | None,
 ) -> str:
-    clauses: list[str] = []
-
-    if schema.geocode_status_field:
-        clauses.append(
-            f"({schema.geocode_status_field} IS NULL OR {schema.geocode_status_field} <> 'H')"
-        )
-
-    if schema.geocode_source_field == "geocode_source":
-        clauses.append(
-            "LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%'"
-        )
-        clauses.append("LOWER(geocode_source) NOT LIKE 'asa geocodes%'")
-
     if esri_date:
         if schema.last_edited_field:
-            clauses.append(f"{schema.last_edited_field} >= DATE '{esri_date}'")
+            return f"{schema.last_edited_field} >= DATE '{esri_date}'"
         else:
             logger.warning(
                 "Geocode layer no longer exposes last_edited_date; falling back to a full geocode refresh"
             )
 
-    return " AND ".join(clauses) if clauses else "1=1"
+    return "1=1"
 
 
 def normalize_geocode_feature(

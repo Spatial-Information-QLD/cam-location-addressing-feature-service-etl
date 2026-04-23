@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     esri_geocode_rest_api_apply_edit_url: str = (
         "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_Geocodes_UAT/FeatureServer/0/applyEdits"
     )
+    esri_address_iri_pid_map_query_url: str = (
+        "https://qportal.information.qld.gov.au/arcgis/rest/services/LOC/Address_IRI_to_PID_UAT/FeatureServer/0/query"
+    )
 
     # PLS local_auth
     esri_pls_local_auth_api_query_url: str = (

@@ -117,22 +117,33 @@ def test_build_geocode_where_clause_for_new_schema_without_incremental_field():
     assert build_geocode_where_clause(schema, "2026-04-14 00:00:00") == "1=1"
 
 
-def test_build_geocode_where_clause_for_legacy_schema():
+def test_build_geocode_where_clause_for_incremental_schema():
     schema = GeocodeLayerSchema(
         object_id_field="objectid",
-        address_pid_field="address_pid",
-        geocode_type_field="geocode_type",
-        geocode_source_field="geocode_source",
-        geocode_status_field="geocode_status",
+        address_pid_field="pid",
+        geocode_type_field="type",
+        geocode_source_field="source",
+        geocode_status_field=None,
         last_edited_field="last_edited_date",
     )
 
-    assert build_geocode_where_clause(schema, "2026-04-14 00:00:00") == (
-        "(geocode_status IS NULL OR geocode_status <> 'H')"
-        " AND LOWER(geocode_source) NOT LIKE 'derived from geoscape buildings%'"
-        " AND LOWER(geocode_source) NOT LIKE 'asa geocodes%'"
-        " AND last_edited_date >= DATE '2026-04-14 00:00:00'"
+    assert (
+        build_geocode_where_clause(schema, "2026-04-14 00:00:00")
+        == "last_edited_date >= DATE '2026-04-14 00:00:00'"
     )
+
+
+def test_build_geocode_where_clause_for_full_load_with_incremental_schema():
+    schema = GeocodeLayerSchema(
+        object_id_field="objectid",
+        address_pid_field="pid",
+        geocode_type_field="type",
+        geocode_source_field="source",
+        geocode_status_field=None,
+        last_edited_field="last_edited_date",
+    )
+
+    assert build_geocode_where_clause(schema, None) == "1=1"
 
 
 def test_normalize_geocode_feature_for_new_schema():
