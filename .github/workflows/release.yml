@@ -9,7 +9,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/spatial-information-qld/address-esri-etl
+  IMAGE_NAME: ghcr.io/spatial-information-qld/pls-etl
 
 jobs:
   build:

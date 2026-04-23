@@ -1,7 +1,7 @@
 [project]
 name = "address_etl"
 version = "0.1.0"
-description = "ETL for the location address feature service."
+description = "PLS ETL."
 authors = [
     { name="Edmond Chuc", email="edmond@kurrawong.ai" },
 ]

@@ -2,8 +2,8 @@ import sqlite3
 
 import pytest
 
-from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.id_map import text_to_id_for_pk
+from address_etl.sqlite_dict_factory import dict_row_factory
 
 
 @pytest.fixture

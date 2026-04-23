@@ -1,13 +1,13 @@
-from collections.abc import Iterable
 import logging
 import sqlite3
 import time
+from collections.abc import Iterable
 
 import httpx
 
+from address_etl.address_iri_pid_map import load_address_pid_mappings
 from address_etl.crud import sparql_query
 from address_etl.id_map import text_to_id_for_pk
-from address_etl.address_iri_pid_map import load_address_pid_mappings
 from address_etl.pls.queries import (
     address,
     local_auth,
@@ -458,11 +458,13 @@ def populate_road_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} roads (batch {i//optimized_batch_size + 1})"
+                f"Processed {processed_count} of {total_iris} roads (batch {i // optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
+            logger.error(
+                f"Failed to process batch {i // optimized_batch_size + 1}: {e}"
+            )
             raise
 
     restore_sqlite_settings(cursor)
@@ -537,11 +539,13 @@ def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} parcels (batch {i//optimized_batch_size + 1})"
+                f"Processed {processed_count} of {total_iris} parcels (batch {i // optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
+            logger.error(
+                f"Failed to process batch {i // optimized_batch_size + 1}: {e}"
+            )
             raise
 
     restore_sqlite_settings(cursor)
@@ -602,11 +606,13 @@ def populate_site_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} sites (batch {i//optimized_batch_size + 1})"
+                f"Processed {processed_count} of {total_iris} sites (batch {i // optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
+            logger.error(
+                f"Failed to process batch {i // optimized_batch_size + 1}: {e}"
+            )
             raise
 
     restore_sqlite_settings(cursor)
@@ -669,11 +675,13 @@ def populate_place_name_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} place names (batch {i//optimized_batch_size + 1})"
+                f"Processed {processed_count} of {total_iris} place names (batch {i // optimized_batch_size + 1})"
             )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
+            logger.error(
+                f"Failed to process batch {i // optimized_batch_size + 1}: {e}"
+            )
             raise
 
     restore_sqlite_settings(cursor)
@@ -716,7 +724,9 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             rows = response.json()["results"]["bindings"]
             address_pid_lookup = load_address_pid_mappings_for_rows(rows, cursor)
-            insert_data, missing_iris = build_address_insert_data(rows, address_pid_lookup)
+            insert_data, missing_iris = build_address_insert_data(
+                rows, address_pid_lookup
+            )
 
             cursor.executemany(
                 "INSERT INTO lf_address (addr_id, address_pid, parcel_id, addr_status_code, unit_type, unit_no, unit_suffix, level_type, level_no, level_suffix, street_no_first, street_no_first_suffix, street_no_last, street_no_last_suffix, road_id, site_id, location_desc, address_standard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -730,7 +740,7 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
 
             processed_count += batch_size
             logger.info(
-                f"Processed {processed_count} of {total_iris} addresses (batch {i//optimized_batch_size + 1})"
+                f"Processed {processed_count} of {total_iris} addresses (batch {i // optimized_batch_size + 1})"
             )
             if missing_iris:
                 logger.warning(
@@ -741,7 +751,9 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to process batch {i//optimized_batch_size + 1}: {e}")
+            logger.error(
+                f"Failed to process batch {i // optimized_batch_size + 1}: {e}"
+            )
             raise
 
     restore_sqlite_settings(cursor)

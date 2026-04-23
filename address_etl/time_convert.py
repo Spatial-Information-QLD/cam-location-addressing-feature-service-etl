@@ -1,6 +1,6 @@
-import pytz
-
 from datetime import datetime
+
+import pytz
 
 
 def milliseconds_to_iso_8601_utc(milliseconds: int) -> datetime:

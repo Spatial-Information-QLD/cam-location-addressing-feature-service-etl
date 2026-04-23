@@ -97,8 +97,7 @@ def load_geocode_type_codes(cursor: sqlite3.Cursor) -> dict[str, str]:
         """
     )
     return {
-        row["geocode_type_iri"]: row["geocode_type_code"]
-        for row in cursor.fetchall()
+        row["geocode_type_iri"]: row["geocode_type_code"] for row in cursor.fetchall()
     }
 
 
@@ -179,8 +178,12 @@ def get_geocode_layer_schema(layer_definition: dict[str, Any]) -> GeocodeLayerSc
         address_pid_field=address_pid_field,
         geocode_type_field=geocode_type_field,
         geocode_source_field=geocode_source_field,
-        geocode_status_field="geocode_status" if "geocode_status" in field_names else None,
-        last_edited_field="last_edited_date" if "last_edited_date" in field_names else None,
+        geocode_status_field="geocode_status"
+        if "geocode_status" in field_names
+        else None,
+        last_edited_field="last_edited_date"
+        if "last_edited_date" in field_names
+        else None,
     )
 
 
@@ -226,47 +229,7 @@ def get_layer_url(query_url: str) -> str:
 
 
 def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
-    """Insert geocodes into the database or update existing rows"""
-    for feature in features:
-        attrs = feature["attributes"]
-        geom = feature["geometry"]
-
-        cursor.execute(
-            "SELECT * FROM geocode WHERE geocode_id = ?",
-            (attrs["objectid"],),
-        )
-
-        if cursor.fetchone():
-            cursor.execute(
-                """
-                UPDATE geocode SET geocode_type = ?, address_pid = ?, longitude = ?, latitude = ? WHERE geocode_id = ?
-                """,
-                (
-                    attrs["geocode_type"],
-                    attrs["address_pid"],
-                    geom["x"],
-                    geom["y"],
-                    attrs["objectid"],
-                ),
-            )
-        else:
-            cursor.execute(
-                """
-                INSERT INTO geocode (geocode_id, geocode_type, address_pid, longitude, latitude)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                (
-                    attrs["objectid"],
-                    attrs["geocode_type"],
-                    attrs["address_pid"],
-                    geom["x"],
-                    geom["y"],
-                ),
-            )
-
-
-def insert_geocodes_pls(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
-    """Insert geocodes into the PLS database"""
+    """Insert geocodes into the PLS database."""
     for feature in features:
         attrs = feature["attributes"]
         geom = feature["geometry"]
@@ -390,9 +353,9 @@ class GeocodeImporter:
             {
                 feature["attributes"][self.schema.geocode_type_field]
                 for feature in payload.get("features", [])
-                if feature["attributes"].get(self.schema.geocode_type_field, "").startswith(
-                    GEOCODE_TYPE_URI_PREFIX
-                )
+                if feature["attributes"]
+                .get(self.schema.geocode_type_field, "")
+                .startswith(GEOCODE_TYPE_URI_PREFIX)
             }
         )
 
@@ -432,7 +395,7 @@ class GeocodeImporter:
                 return stored_geocode_type_codes
             raise
 
-    def import_geocodes(self, is_pls: bool = False) -> None:
+    def import_geocodes(self) -> None:
         logger.info(f"Fetching {self.geocode_count} geocodes")
         batch_size = 2000
         for offset in track(
@@ -442,10 +405,7 @@ class GeocodeImporter:
             features = self.fetch_geocodes(offset, batch_size)
             if not features:
                 logger.warning(f"No geocodes found for offset {offset}")
-            if is_pls:
-                insert_geocodes_pls(self.cursor, features)
-            else:
-                insert_geocodes(self.cursor, features)
+            insert_geocodes(self.cursor, features)
             self.cursor.connection.commit()
 
     @backoff.on_exception(
@@ -506,9 +466,7 @@ class GeocodeImporter:
             raise error
 
 
-def import_geocodes(
-    cursor: sqlite3.Cursor, from_datetime: datetime | None = None, is_pls: bool = False
-):
+def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = None):
     if from_datetime:
         esri_date = datetime_to_esri_datetime_utc(from_datetime)
     else:
@@ -518,13 +476,12 @@ def import_geocodes(
     with httpx.Client(timeout=settings.http_timeout_in_seconds) as client:
         geocode_importer = GeocodeImporter(cursor, client, esri_date)
         if geocode_importer.requires_full_refresh:
-            table_name = "lf_geocode_sp_survey_point" if is_pls else "geocode"
             logger.info(
-                f"Clearing {table_name} before full geocode refresh because the live layer no longer supports incremental imports"
+                "Clearing lf_geocode_sp_survey_point before full geocode refresh because the live layer no longer supports incremental imports"
             )
-            cursor.execute(f"DELETE FROM {table_name}")
+            cursor.execute("DELETE FROM lf_geocode_sp_survey_point")
             cursor.connection.commit()
-        geocode_importer.import_geocodes(is_pls)
+        geocode_importer.import_geocodes()
 
     logger.info(
         f"Geocodes loaded successfully ({geocode_importer.geocode_count} records) in {time.time() - start_time:.2f} seconds"

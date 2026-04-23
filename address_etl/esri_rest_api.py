@@ -45,7 +45,9 @@ def get_esri_token(
         payload = response.json()
         token = payload.get("token")
         if token is None:
-            _raise_for_missing_key(response, payload, "token", "Error getting ESRI token")
+            _raise_for_missing_key(
+                response, payload, "token", "Error getting ESRI token"
+            )
         return token
     except Exception as e:
         logger.error(f"Error getting ESRI token: {response.text}")
@@ -99,7 +101,9 @@ def get_count(
         payload = response.json()
         count = payload.get("count")
         if count is None:
-            _raise_for_missing_key(response, payload, "count", "Error getting records count")
+            _raise_for_missing_key(
+                response, payload, "count", "Error getting records count"
+            )
         return int(count)
     except Exception as e:
         logger.error(

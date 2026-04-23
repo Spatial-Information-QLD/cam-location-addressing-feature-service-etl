@@ -43,20 +43,26 @@ def get_address_iri_pid_layer_schema(
     elif "address_iri" in field_names:
         address_iri_field = "address_iri"
     else:
-        raise RuntimeError("Address IRI to PID layer schema is missing address IRI field")
+        raise RuntimeError(
+            "Address IRI to PID layer schema is missing address IRI field"
+        )
 
     if "pid" in field_names:
         address_pid_field = "pid"
     elif "address_pid" in field_names:
         address_pid_field = "address_pid"
     else:
-        raise RuntimeError("Address IRI to PID layer schema is missing address PID field")
+        raise RuntimeError(
+            "Address IRI to PID layer schema is missing address PID field"
+        )
 
     return AddressIriPidLayerSchema(
         object_id_field=object_id_field,
         address_iri_field=address_iri_field,
         address_pid_field=address_pid_field,
-        last_edited_field="last_edited_date" if "last_edited_date" in field_names else None,
+        last_edited_field="last_edited_date"
+        if "last_edited_date" in field_names
+        else None,
     )
 
 
@@ -109,10 +115,7 @@ def load_address_pid_mappings(
             """
         )
 
-    return {
-        row["address_iri"]: row["address_pid"]
-        for row in cursor.fetchall()
-    }
+    return {row["address_iri"]: row["address_pid"] for row in cursor.fetchall()}
 
 
 def save_address_pid_mappings(
@@ -192,7 +195,9 @@ class AddressIriPidImporter:
         for offset in range(0, self.mapping_count, batch_size):
             mappings = self.fetch_mappings(offset, batch_size)
             if not mappings:
-                logger.warning(f"No address IRI to PID mappings found for offset {offset}")
+                logger.warning(
+                    f"No address IRI to PID mappings found for offset {offset}"
+                )
                 continue
 
             save_address_pid_mappings(self.cursor, mappings)

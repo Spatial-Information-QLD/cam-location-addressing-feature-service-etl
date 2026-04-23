@@ -24,9 +24,7 @@ def test_normalize_geocode_type_maps_uri_to_legacy_code():
     assert (
         normalize_geocode_type(
             "https://linked.data.gov.au/def/geocode-types/property-centroid",
-            {
-                "https://linked.data.gov.au/def/geocode-types/property-centroid": "PC"
-            },
+            {"https://linked.data.gov.au/def/geocode-types/property-centroid": "PC"},
         )
         == "PC"
     )

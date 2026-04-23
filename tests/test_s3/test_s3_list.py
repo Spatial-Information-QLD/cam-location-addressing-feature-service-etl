@@ -25,30 +25,30 @@ def test_list_buckets(s3: S3):
 
 
 def test_list_objects(s3: S3):
-    s3.create_bucket("location-addressing-sqlite")
+    s3.create_bucket("pls-feature-service-etl")
 
-    assert s3.list_objects("location-addressing-sqlite") == []
+    assert s3.list_objects("pls-feature-service-etl") == []
 
-    FILE_NAME = "etl/2025-05-26T12:00:00-test.txt"
-    FILE_NAME_2 = "etl/2025-05-26T12:00:01-test.txt"
+    FILE_NAME = "pls-etl/2025-05-26T12:00:00-test.txt"
+    FILE_NAME_2 = "pls-etl/2025-05-26T12:00:01-test.txt"
 
     s3.create_object(
-        "location-addressing-sqlite",
+        "pls-feature-service-etl",
         FILE_NAME,
         b"Hello, world!",
     )
 
-    result = s3.list_objects("location-addressing-sqlite")
+    result = s3.list_objects("pls-feature-service-etl")
     assert result[0]["Key"] == FILE_NAME
 
     # API should return in desc lexigraphical order
     s3.create_object(
-        "location-addressing-sqlite",
+        "pls-feature-service-etl",
         FILE_NAME_2,
         b"Hello, world!",
     )
 
-    result = s3.list_objects("location-addressing-sqlite")
+    result = s3.list_objects("pls-feature-service-etl")
     assert result[0]["Key"] == FILE_NAME_2 and result[1]["Key"] == FILE_NAME
 
 
