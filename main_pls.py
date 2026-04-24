@@ -10,6 +10,7 @@ import pytz
 from address_etl.address_iri_pid_map import import_address_pid_mappings
 from address_etl.dynamodb_lock import get_lock
 from address_etl.geocode import import_geocodes
+from address_etl.kafka import publish_presigned_url
 from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
 from address_etl.pls.tables import (
     create_tables,
@@ -27,6 +28,32 @@ LOCK_ID = "address-etl-pls"
 
 
 logger = logging.getLogger(__name__)
+
+
+def format_kafka_timestamp(dt: datetime) -> str:
+    return dt.astimezone(pytz.UTC).isoformat()
+
+
+def build_artifact_headers(
+    *,
+    etl_started_at: datetime,
+    etl_finished_at: datetime,
+    artifact_uploaded_at: datetime,
+    duration_seconds: float,
+    s3_bucket: str,
+    s3_key: str,
+    presigned_url_expiry_seconds: int,
+) -> dict[str, str]:
+    return {
+        "etl-name": "pls",
+        "etl-started-at": format_kafka_timestamp(etl_started_at),
+        "etl-finished-at": format_kafka_timestamp(etl_finished_at),
+        "artifact-uploaded-at": format_kafka_timestamp(artifact_uploaded_at),
+        "etl-duration-seconds": f"{duration_seconds:.3f}",
+        "s3-bucket": s3_bucket,
+        "s3-key": s3_key,
+        "presigned-url-expiry-seconds": str(presigned_url_expiry_seconds),
+    }
 
 
 def main():
@@ -51,6 +78,10 @@ def main():
     lock = get_lock(LOCK_ID, table)
 
     with lock.acquire():
+        etl_started_at = datetime.now(pytz.UTC)
+        etl_started_at_brisbane = utc_to_brisbane_time(etl_started_at)
+        etl_started_at_str = etl_started_at_brisbane.strftime("%Y-%m-%dT%H:%M:%S%z")
+
         # Create database directory.
         Path(settings.pls_sqlite_conn_str).parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(settings.pls_sqlite_conn_str)
@@ -66,7 +97,7 @@ def main():
         try:
             cursor = connection.cursor()
             create_tables(cursor)
-            metadata_write_start_time(cursor)
+            metadata_write_start_time(cursor, etl_started_at_str)
             # Get the previous ETL's sqlite database from S3
             previous_db = get_latest_file(
                 settings.pls_s3_bucket_name, s3, prefix=S3_FILE_PREFIX_KEY
@@ -159,16 +190,31 @@ def main():
             populate_tables(cursor)
             prune_geocodes_without_addresses(cursor)
 
-            current_datetime = datetime.now(pytz.UTC)
-            brisbane_time = utc_to_brisbane_time(current_datetime)
-            current_datetime_str = brisbane_time.strftime("%Y-%m-%dT%H:%M:%S%z")
-            metadata_write_end_time(cursor, current_datetime_str)
-            upload_file(
+            etl_finished_at = datetime.now(pytz.UTC)
+            etl_finished_at_brisbane = utc_to_brisbane_time(etl_finished_at)
+            etl_finished_at_str = etl_finished_at_brisbane.strftime("%Y-%m-%dT%H:%M:%S%z")
+            metadata_write_end_time(cursor, etl_finished_at_str)
+
+            s3_key = f"{S3_FILE_PREFIX_KEY}{etl_finished_at_str}/pls.db"
+            presigned_url = upload_file(
                 settings.pls_s3_bucket_name,
-                f"{S3_FILE_PREFIX_KEY}{current_datetime_str}/pls.db",
+                s3_key,
                 settings.pls_sqlite_conn_str,
                 s3,
                 presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
+            )
+            artifact_uploaded_at = datetime.now(pytz.UTC)
+            publish_presigned_url(
+                presigned_url,
+                build_artifact_headers(
+                    etl_started_at=etl_started_at,
+                    etl_finished_at=etl_finished_at,
+                    artifact_uploaded_at=artifact_uploaded_at,
+                    duration_seconds=(etl_finished_at - etl_started_at).total_seconds(),
+                    s3_bucket=settings.pls_s3_bucket_name,
+                    s3_key=s3_key,
+                    presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
+                ),
             )
         finally:
             logger.info("Closing connection to SQLite database")
