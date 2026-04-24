@@ -6,14 +6,14 @@ import pytz
 from address_etl.time_convert import utc_to_brisbane_time
 
 
-def metadata_write_start_time(cursor: sqlite3.Cursor):
+def metadata_write_start_time(cursor: sqlite3.Cursor, start_time_str: str | None = None):
     """Write the start time to the metadata table"""
-    current_datetime = datetime.now(pytz.UTC)
-    brisbane_time = utc_to_brisbane_time(current_datetime)
-    cursor.execute(
-        "INSERT INTO metadata (start_time) VALUES (?)",
-        (brisbane_time.strftime("%Y-%m-%dT%H:%M:%S%z"),),
-    )
+    if start_time_str is None:
+        current_datetime = datetime.now(pytz.UTC)
+        brisbane_time = utc_to_brisbane_time(current_datetime)
+        start_time_str = brisbane_time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+    cursor.execute("INSERT INTO metadata (start_time) VALUES (?)", (start_time_str,))
     cursor.connection.commit()
 
 
