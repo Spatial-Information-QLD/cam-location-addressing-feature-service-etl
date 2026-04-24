@@ -1,8 +1,12 @@
+from typing import TYPE_CHECKING
+
 from dynamodblock import DynamoDBLock
-from mypy_boto3_dynamodb.service_resource import Table
+
+if TYPE_CHECKING:
+    from mypy_boto3_dynamodb.service_resource import Table
 
 
-def get_lock(lock_id: str, table: Table) -> DynamoDBLock:
+def get_lock(lock_id: str, table: "Table") -> DynamoDBLock:
     return DynamoDBLock(
         lock_id=lock_id,
         dynamodb_table_resource=table,
