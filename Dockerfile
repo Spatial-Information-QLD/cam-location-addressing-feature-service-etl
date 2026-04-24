@@ -1,24 +1,34 @@
 ARG PYTHON_VERSION=3.13
+ARG UV_VERSION=0.9.28
 
 #
 # Build
 #
-FROM python:${PYTHON_VERSION}-alpine AS python-build
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+FROM python:${PYTHON_VERSION}-slim AS python-build
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_CACHE_DIR=/tmp/uv-cache
+
+COPY --from=uv /uv /uvx /bin/
 
 WORKDIR /app
 COPY . .
 
-RUN uv sync
+RUN uv sync --frozen --no-dev
 
 #
 # Final
 #
-FROM python:${PYTHON_VERSION}-alpine
+FROM python:${PYTHON_VERSION}-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Create a non-root user
-RUN adduser -D -h /app appuser
+RUN useradd --system --create-home --home-dir /app appuser
 
 # Set virtual environment path
 ENV VIRTUAL_ENV=/app/.venv
