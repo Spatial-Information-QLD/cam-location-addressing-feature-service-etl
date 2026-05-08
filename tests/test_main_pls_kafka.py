@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from datetime import datetime
+import shutil
 import sqlite3
 
 import pytz
@@ -14,6 +15,10 @@ class FakeDatetime:
     @classmethod
     def now(cls, _tz):
         return next(cls.values)
+
+    @classmethod
+    def fromisoformat(cls, value):
+        return datetime.fromisoformat(value)
 
 
 class FakeDynamoResource:
@@ -235,8 +240,9 @@ def test_load_previous_esri_geocodes_skips_legacy_pls_geocode_table(tmp_path):
     create_tables(cursor)
     cursor.execute("ATTACH DATABASE ? AS previous", (str(previous_path),))
 
-    main_pls.load_previous_esri_geocodes(cursor)
+    loaded = main_pls.load_previous_esri_geocodes(cursor)
 
+    assert loaded is False
     assert cursor.execute("SELECT COUNT(*) FROM esri_geocodes").fetchone()[0] == 0
 
     cursor.execute("DETACH DATABASE previous")
@@ -278,8 +284,9 @@ def test_load_previous_esri_geocodes_copies_raw_cache(tmp_path):
     create_tables(cursor)
     cursor.execute("ATTACH DATABASE ? AS previous", (str(previous_path),))
 
-    main_pls.load_previous_esri_geocodes(cursor)
+    loaded = main_pls.load_previous_esri_geocodes(cursor)
 
+    assert loaded is True
     assert cursor.execute(
         """
         SELECT geocode_id, geocode_type, address_pid, centoid_lat, centoid_lon
@@ -289,3 +296,79 @@ def test_load_previous_esri_geocodes_copies_raw_cache(tmp_path):
 
     cursor.execute("DETACH DATABASE previous")
     connection.close()
+
+
+def test_main_full_pulls_geocodes_when_previous_has_no_raw_cache(
+    monkeypatch,
+    tmp_path,
+):
+    recorded = {
+        "address_pid_previous": None,
+        "geocode_previous": "unset",
+    }
+
+    previous_path = tmp_path / "previous.db"
+    previous_connection = sqlite3.connect(previous_path)
+    previous_connection.row_factory = main_pls.dict_row_factory
+    previous_cursor = previous_connection.cursor()
+    create_tables(previous_cursor)
+    previous_cursor.execute(
+        "INSERT INTO metadata (start_time) VALUES ('2026-04-22T12:00:00+1000')"
+    )
+    previous_cursor.execute("DROP TABLE esri_geocodes")
+    previous_connection.commit()
+    previous_connection.close()
+
+    downloaded_previous_path = tmp_path / "downloaded_previous.db"
+
+    start_time = datetime(2026, 4, 23, 2, 0, 0, tzinfo=pytz.UTC)
+    finish_time = datetime(2026, 4, 23, 2, 2, 30, tzinfo=pytz.UTC)
+    upload_time = datetime(2026, 4, 23, 2, 2, 45, tzinfo=pytz.UTC)
+    FakeDatetime.values = iter((start_time, finish_time, upload_time))
+
+    def fake_download_file(_bucket_name, _key, file_path, _s3):
+        shutil.copyfile(previous_path, file_path)
+
+    def fake_import_address_pid_mappings(_cursor, previous):
+        recorded["address_pid_previous"] = previous
+
+    def fake_import_geocodes(_cursor, previous):
+        recorded["geocode_previous"] = previous
+
+    monkeypatch.setattr(main_pls, "datetime", FakeDatetime)
+    monkeypatch.setattr(main_pls, "utc_to_brisbane_time", lambda dt: dt)
+    monkeypatch.setattr(main_pls, "download_file", fake_download_file)
+    monkeypatch.setattr(main_pls, "get_latest_file", lambda *args, **kwargs: "old.db")
+    monkeypatch.setattr(
+        main_pls, "import_address_pid_mappings", fake_import_address_pid_mappings
+    )
+    monkeypatch.setattr(main_pls, "import_geocodes", fake_import_geocodes)
+    monkeypatch.setattr(main_pls, "populate_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        main_pls, "upload_file", lambda *args, **kwargs: "https://example.com/presigned"
+    )
+    monkeypatch.setattr(main_pls, "publish_presigned_url", lambda *args: None)
+    monkeypatch.setattr(main_pls, "S3", FakeS3)
+    monkeypatch.setattr(main_pls, "get_lock", lambda lock_id, table: FakeLock())
+    monkeypatch.setattr(
+        main_pls.boto3, "resource", lambda *args, **kwargs: FakeDynamoResource()
+    )
+    monkeypatch.setattr(main_pls, "PREVIOUS_DB_PATH", str(downloaded_previous_path))
+
+    monkeypatch.setattr(main_pls.settings, "use_minio", False)
+    monkeypatch.setattr(main_pls.settings, "lock_table_name", "address-etl-lock")
+    monkeypatch.setattr(
+        main_pls.settings, "pls_s3_bucket_name", "pls-feature-service-etl"
+    )
+    monkeypatch.setattr(
+        main_pls.settings, "pls_sqlite_conn_str", str(tmp_path / "pls.db")
+    )
+    monkeypatch.setattr(main_pls.settings, "s3_presigned_url_expiry_seconds", 3600)
+    monkeypatch.setattr(main_pls.settings, "kafka_enabled", False)
+
+    main_pls.main()
+
+    assert recorded["address_pid_previous"] == datetime.fromisoformat(
+        "2026-04-22T12:00:00+1000"
+    )
+    assert recorded["geocode_previous"] is None

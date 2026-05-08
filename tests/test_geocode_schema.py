@@ -1,11 +1,14 @@
+from datetime import datetime, timezone
 import sqlite3
 
+import address_etl.geocode as geocode_module
 from address_etl.geocode import (
     GeocodeLayerSchema,
     build_geocode_type_code_query,
     build_geocode_where_clause,
     get_geocode_layer_schema,
     get_layer_url,
+    import_geocodes,
     insert_geocodes,
     load_geocode_type_codes,
     normalize_geocode_feature,
@@ -283,5 +286,95 @@ def test_insert_geocodes_upserts_into_esri_geocode_cache():
             ).fetchone()["count"]
             == 0
         )
+    finally:
+        connection.close()
+
+
+def test_import_geocodes_full_refreshes_when_incremental_cache_count_mismatches(
+    monkeypatch,
+):
+    importer_dates = []
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    class FakeGeocodeImporter:
+        def __init__(self, cursor, _client, esri_date):
+            self.cursor = cursor
+            self.esri_date = esri_date
+            self.requires_full_refresh = False
+            self.geocode_count = 2
+            importer_dates.append(esri_date)
+
+        def import_geocodes(self):
+            if self.esri_date is not None:
+                return
+
+            insert_geocodes(
+                self.cursor,
+                [
+                    {
+                        "attributes": {
+                            "objectid": "geo-1",
+                            "geocode_type": "PC",
+                            "address_pid": "100",
+                        },
+                        "geometry": {"y": -27.0, "x": 153.0},
+                    },
+                    {
+                        "attributes": {
+                            "objectid": "geo-2",
+                            "geocode_type": "DF",
+                            "address_pid": "200",
+                        },
+                        "geometry": {"y": -28.0, "x": 152.0},
+                    },
+                ],
+            )
+            self.cursor.connection.commit()
+
+    monkeypatch.setattr(geocode_module.httpx, "Client", FakeClient)
+    monkeypatch.setattr(geocode_module, "GeocodeImporter", FakeGeocodeImporter)
+
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = dict_row_factory
+    try:
+        cursor = connection.cursor()
+        create_tables(cursor)
+        insert_geocodes(
+            cursor,
+            [
+                {
+                    "attributes": {
+                        "objectid": "stale-geocode",
+                        "geocode_type": "PC",
+                        "address_pid": "999",
+                    },
+                    "geometry": {"y": -29.0, "x": 151.0},
+                }
+            ],
+        )
+        connection.commit()
+
+        import_geocodes(cursor, datetime(2026, 4, 23, tzinfo=timezone.utc))
+
+        assert importer_dates == ["2026-04-23 00:00:00", None]
+        assert cursor.execute(
+            """
+            SELECT geocode_id, geocode_type, address_pid
+            FROM esri_geocodes
+            ORDER BY geocode_id
+            """
+        ).fetchall() == [
+            {"geocode_id": "geo-1", "geocode_type": "PC", "address_pid": "100"},
+            {"geocode_id": "geo-2", "geocode_type": "DF", "address_pid": "200"},
+        ]
     finally:
         connection.close()

@@ -52,7 +52,7 @@ def build_artifact_headers(
     }
 
 
-def load_previous_esri_geocodes(cursor: sqlite3.Cursor) -> None:
+def load_previous_esri_geocodes(cursor: sqlite3.Cursor) -> bool:
     """Load the raw geocode cache from an attached previous database when present."""
     cursor.execute(
         """
@@ -64,7 +64,7 @@ def load_previous_esri_geocodes(cursor: sqlite3.Cursor) -> None:
         logger.info(
             "Previous ETL has no esri_geocodes table; geocodes will be pulled from the feature service"
         )
-        return
+        return False
 
     logger.info("Loading esri_geocodes from previous ETL")
     cursor.execute(
@@ -86,6 +86,7 @@ def load_previous_esri_geocodes(cursor: sqlite3.Cursor) -> None:
         """
     )
     cursor.connection.commit()
+    return True
 
 
 def main():
@@ -135,6 +136,7 @@ def main():
                 settings.pls_s3_bucket_name, s3, prefix=S3_FILE_PREFIX_KEY
             )
             previous_etl_start_time = None
+            previous_esri_geocodes_loaded = False
             if previous_db:
                 download_file(
                     settings.pls_s3_bucket_name, previous_db, PREVIOUS_DB_PATH, s3
@@ -149,7 +151,7 @@ def main():
                     cursor.fetchone()["start_time"]
                 )
 
-                load_previous_esri_geocodes(cursor)
+                previous_esri_geocodes_loaded = load_previous_esri_geocodes(cursor)
 
                 # Load the previous ETL's mapping tables
                 map_id_tables = (
@@ -203,7 +205,10 @@ def main():
                 cursor.connection.commit()
 
             import_address_pid_mappings(cursor, previous_etl_start_time)
-            import_geocodes(cursor, previous_etl_start_time)
+            geocode_from_datetime = (
+                previous_etl_start_time if previous_esri_geocodes_loaded else None
+            )
+            import_geocodes(cursor, geocode_from_datetime)
             populate_tables(cursor)
 
             etl_finished_at = datetime.now(pytz.UTC)

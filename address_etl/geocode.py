@@ -489,6 +489,20 @@ def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = Non
             cursor.connection.commit()
         geocode_importer.import_geocodes()
 
+        cached_geocode_count = cursor.execute(
+            "SELECT COUNT(*) AS count FROM esri_geocodes"
+        ).fetchone()["count"]
+        if esri_date and cached_geocode_count != geocode_importer.geocode_count:
+            logger.warning(
+                "Incremental geocode import left %s cached rows but the live layer has %s; performing a full geocode refresh",
+                cached_geocode_count,
+                geocode_importer.geocode_count,
+            )
+            cursor.execute("DELETE FROM esri_geocodes")
+            cursor.connection.commit()
+            geocode_importer = GeocodeImporter(cursor, client, None)
+            geocode_importer.import_geocodes()
+
     logger.info(
         f"Geocodes loaded successfully ({geocode_importer.geocode_count} records) in {time.time() - start_time:.2f} seconds"
     )
