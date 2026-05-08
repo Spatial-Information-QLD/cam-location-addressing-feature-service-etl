@@ -33,6 +33,9 @@ def publish_presigned_url(
     *,
     producer: ProducerLike | None = None,
 ) -> None:
+    if settings.kafka_topic in (None, ""):
+        raise RuntimeError("Kafka topic is not configured")
+
     kafka_producer = producer or get_producer()
     delivery_error: RuntimeError | None = None
 

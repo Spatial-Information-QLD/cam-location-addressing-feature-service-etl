@@ -222,18 +222,23 @@ def main():
                 presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
             )
             artifact_uploaded_at = datetime.now(pytz.UTC)
-            publish_presigned_url(
-                presigned_url,
-                build_artifact_headers(
-                    etl_started_at=etl_started_at,
-                    etl_finished_at=etl_finished_at,
-                    artifact_uploaded_at=artifact_uploaded_at,
-                    duration_seconds=(etl_finished_at - etl_started_at).total_seconds(),
-                    s3_bucket=settings.pls_s3_bucket_name,
-                    s3_key=s3_key,
-                    presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
-                ),
-            )
+            if settings.kafka_enabled:
+                publish_presigned_url(
+                    presigned_url,
+                    build_artifact_headers(
+                        etl_started_at=etl_started_at,
+                        etl_finished_at=etl_finished_at,
+                        artifact_uploaded_at=artifact_uploaded_at,
+                        duration_seconds=(
+                            etl_finished_at - etl_started_at
+                        ).total_seconds(),
+                        s3_bucket=settings.pls_s3_bucket_name,
+                        s3_key=s3_key,
+                        presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
+                    ),
+                )
+            else:
+                logger.info("Kafka publishing disabled; skipping artifact notification")
         finally:
             logger.info("Closing connection to SQLite database")
             connection.close()

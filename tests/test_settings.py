@@ -55,3 +55,22 @@ def test_settings_require_sasl_credentials_for_sasl_protocols():
             kafka_sasl_username="msk-user",
             kafka_sasl_password=None,
         )
+
+
+def test_settings_require_kafka_topic_when_kafka_enabled():
+    with pytest.raises(ValidationError, match="kafka_topic is not configured"):
+        build_settings(kafka_enabled=True, kafka_topic=None)
+
+
+def test_settings_allow_missing_kafka_topic_when_kafka_disabled():
+    settings = build_settings(
+        kafka_enabled=False,
+        kafka_topic=None,
+        kafka_security_protocol="SASL_SSL",
+        kafka_sasl_mechanism=None,
+        kafka_sasl_username=None,
+        kafka_sasl_password=None,
+    )
+
+    assert settings.kafka_enabled is False
+    assert settings.kafka_topic is None
