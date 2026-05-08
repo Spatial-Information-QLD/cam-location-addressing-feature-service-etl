@@ -174,6 +174,19 @@ def create_place_name_indexes(cursor: sqlite3.Cursor):
 
 
 def create_geocode_tables(cursor: sqlite3.Cursor):
+    logger.info("Creating esri_geocodes table")
+    cursor.execute(
+        """
+        CREATE TABLE esri_geocodes (
+            geocode_id TEXT PRIMARY KEY,
+            geocode_type TEXT CHECK (length(geocode_type) <= 4) NOT NULL,
+            address_pid TEXT NOT NULL,
+            centoid_lat REAL NOT NULL,
+            centoid_lon REAL NOT NULL
+        )
+    """
+    )
+
     logger.info("Creating lf_geocode_sp_survey_point table")
     cursor.execute(
         """
@@ -190,8 +203,17 @@ def create_geocode_tables(cursor: sqlite3.Cursor):
     )
 
 
+def create_esri_geocode_indexes(cursor: sqlite3.Cursor):
+    """Create indexes for raw ESRI geocodes after import"""
+    logger.info("Creating ESRI geocode table indexes")
+    cursor.execute(
+        "CREATE INDEX idx_esri_geocodes_address_pid ON esri_geocodes (address_pid)"
+    )
+    cursor.connection.commit()
+
+
 def create_geocode_indexes(cursor: sqlite3.Cursor):
-    """Create indexes for geocode table after data insertion"""
+    """Create indexes for generated PLS geocode table after data insertion"""
     logger.info("Creating geocode table indexes")
     cursor.execute(
         "CREATE INDEX idx_lf_geocode_sp_survey_point_address_pid ON lf_geocode_sp_survey_point (address_pid)"
@@ -755,82 +777,41 @@ def prune_addresses_without_pid_mapping(cursor: sqlite3.Cursor) -> None:
     cursor.connection.commit()
 
 
-def update_geocode_site_id(cursor: sqlite3.Cursor):
+def generate_pls_geocodes(cursor: sqlite3.Cursor):
     start_time = time.time()
-    logger.info("Updating geocode table with site_id")
+    logger.info("Generating PLS geocode table from ESRI geocodes")
 
     optimize_sqlite_for_bulk_inserts(cursor)
-
-    logger.info("Creating temporary mapping table for geocode updates")
+    cursor.execute("DELETE FROM lf_geocode_sp_survey_point")
     cursor.execute(
         """
-        CREATE TEMPORARY TABLE geocode_site_mapping AS
-        SELECT g.geocode_id, a.site_id
-        FROM lf_geocode_sp_survey_point g
-        JOIN lf_address a ON g.address_pid = a.address_pid
-    """
-    )
-
-    cursor.execute(
-        "CREATE INDEX idx_temp_geocode_id ON geocode_site_mapping (geocode_id)"
-    )
-
-    batch_size = 50000
-    total_updated = 0
-
-    while True:
-        cursor.execute(
-            f"""
-            UPDATE lf_geocode_sp_survey_point 
-            SET site_id = (
-                SELECT site_id 
-                FROM geocode_site_mapping 
-                WHERE geocode_site_mapping.geocode_id = lf_geocode_sp_survey_point.geocode_id
-            )
-            WHERE rowid IN (
-                SELECT g.rowid 
-                FROM lf_geocode_sp_survey_point g
-                LEFT JOIN geocode_site_mapping m ON g.geocode_id = m.geocode_id
-                WHERE m.site_id IS NOT NULL AND g.site_id IS NULL
-                LIMIT {batch_size}
-            )
-        """
+        INSERT INTO lf_geocode_sp_survey_point (
+            geocode_id,
+            geocode_type,
+            address_pid,
+            site_id,
+            centoid_lat,
+            centoid_lon
         )
+        SELECT
+            g.geocode_id,
+            g.geocode_type,
+            g.address_pid,
+            a.site_id,
+            g.centoid_lat,
+            g.centoid_lon
+        FROM esri_geocodes g
+        JOIN lf_address a ON g.address_pid = a.address_pid
+        """
+    )
+    logger.info("Generated %s PLS geocode rows", cursor.rowcount)
 
-        rows_updated = cursor.rowcount
-        total_updated += rows_updated
-
-        if rows_updated == 0:
-            break
-
-        cursor.connection.commit()
-        logger.info(f"Updated {total_updated} geocode records so far")
-
-    # Clean up temporary table
-    cursor.execute("DROP TABLE geocode_site_mapping")
-
-    logger.info("Adding foreign key constraint to geocode table")
+    logger.info("Checking geocode foreign keys")
     cursor.execute("PRAGMA foreign_key_check")
 
     restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
-
-
-def prune_geocodes_without_addresses(cursor: sqlite3.Cursor) -> None:
-    logger.info("Pruning geocodes without matching addresses")
-    cursor.execute(
-        """
-        DELETE FROM lf_geocode_sp_survey_point
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM lf_address a
-            WHERE a.address_pid = lf_geocode_sp_survey_point.address_pid
-        )
-        """
-    )
-    logger.info("Pruned %s geocode rows without matching addresses", cursor.rowcount)
-    cursor.connection.commit()
 
 
 def populate_tables(cursor: sqlite3.Cursor):
@@ -853,8 +834,9 @@ def populate_tables(cursor: sqlite3.Cursor):
         create_address_indexes(cursor)
         prune_addresses_without_pid_mapping(cursor)
 
-        # # This will create the geocode table's index as well
-        update_geocode_site_id(cursor)
+        create_esri_geocode_indexes(cursor)
+        generate_pls_geocodes(cursor)
+        create_geocode_indexes(cursor)
 
     ensure_foreign_keys_enabled(cursor)
 

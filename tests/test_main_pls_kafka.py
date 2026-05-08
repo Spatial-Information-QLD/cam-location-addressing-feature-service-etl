@@ -1,9 +1,11 @@
 from contextlib import contextmanager
 from datetime import datetime
+import sqlite3
 
 import pytz
 
 import main_pls
+from address_etl.pls.tables import create_tables
 
 
 class FakeDatetime:
@@ -72,24 +74,35 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
 
     monkeypatch.setattr(main_pls, "datetime", FakeDatetime)
     monkeypatch.setattr(main_pls, "utc_to_brisbane_time", lambda dt: dt)
-    monkeypatch.setattr(main_pls, "metadata_write_start_time", fake_metadata_write_start_time)
-    monkeypatch.setattr(main_pls, "metadata_write_end_time", fake_metadata_write_end_time)
+    monkeypatch.setattr(
+        main_pls, "metadata_write_start_time", fake_metadata_write_start_time
+    )
+    monkeypatch.setattr(
+        main_pls, "metadata_write_end_time", fake_metadata_write_end_time
+    )
     monkeypatch.setattr(main_pls, "upload_file", fake_upload_file)
     monkeypatch.setattr(main_pls, "publish_presigned_url", fake_publish_presigned_url)
     monkeypatch.setattr(main_pls, "get_latest_file", lambda *args, **kwargs: None)
     monkeypatch.setattr(main_pls, "create_tables", lambda cursor: None)
-    monkeypatch.setattr(main_pls, "import_address_pid_mappings", lambda cursor, previous: None)
+    monkeypatch.setattr(
+        main_pls, "import_address_pid_mappings", lambda cursor, previous: None
+    )
     monkeypatch.setattr(main_pls, "import_geocodes", lambda cursor, previous: None)
     monkeypatch.setattr(main_pls, "populate_tables", lambda cursor: None)
-    monkeypatch.setattr(main_pls, "prune_geocodes_without_addresses", lambda cursor: None)
     monkeypatch.setattr(main_pls, "S3", FakeS3)
     monkeypatch.setattr(main_pls, "get_lock", lambda lock_id, table: FakeLock())
-    monkeypatch.setattr(main_pls.boto3, "resource", lambda *args, **kwargs: FakeDynamoResource())
+    monkeypatch.setattr(
+        main_pls.boto3, "resource", lambda *args, **kwargs: FakeDynamoResource()
+    )
 
     monkeypatch.setattr(main_pls.settings, "use_minio", False)
     monkeypatch.setattr(main_pls.settings, "lock_table_name", "address-etl-lock")
-    monkeypatch.setattr(main_pls.settings, "pls_s3_bucket_name", "pls-feature-service-etl")
-    monkeypatch.setattr(main_pls.settings, "pls_sqlite_conn_str", str(tmp_path / "pls.db"))
+    monkeypatch.setattr(
+        main_pls.settings, "pls_s3_bucket_name", "pls-feature-service-etl"
+    )
+    monkeypatch.setattr(
+        main_pls.settings, "pls_sqlite_conn_str", str(tmp_path / "pls.db")
+    )
     monkeypatch.setattr(main_pls.settings, "s3_presigned_url_expiry_seconds", 3600)
 
     main_pls.main()
@@ -115,3 +128,96 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
             "presigned-url-expiry-seconds": "3600",
         },
     }
+
+
+def test_load_previous_esri_geocodes_skips_legacy_pls_geocode_table(tmp_path):
+    previous_path = tmp_path / "previous.db"
+    previous_connection = sqlite3.connect(previous_path)
+    previous_cursor = previous_connection.cursor()
+    previous_cursor.execute(
+        """
+        CREATE TABLE lf_geocode_sp_survey_point (
+            geocode_id TEXT PRIMARY KEY,
+            geocode_type TEXT,
+            address_pid TEXT,
+            site_id TEXT,
+            centoid_lat REAL,
+            centoid_lon REAL
+        )
+        """
+    )
+    previous_cursor.execute(
+        """
+        INSERT INTO lf_geocode_sp_survey_point (
+            geocode_id,
+            geocode_type,
+            address_pid,
+            site_id,
+            centoid_lat,
+            centoid_lon
+        )
+        VALUES ('geo-1', 'PC', '100', 'site-1', -27.1, 153.1)
+        """
+    )
+    previous_connection.commit()
+    previous_connection.close()
+
+    connection = sqlite3.connect(":memory:")
+    cursor = connection.cursor()
+    create_tables(cursor)
+    cursor.execute("ATTACH DATABASE ? AS previous", (str(previous_path),))
+
+    main_pls.load_previous_esri_geocodes(cursor)
+
+    assert cursor.execute("SELECT COUNT(*) FROM esri_geocodes").fetchone()[0] == 0
+
+    cursor.execute("DETACH DATABASE previous")
+    connection.close()
+
+
+def test_load_previous_esri_geocodes_copies_raw_cache(tmp_path):
+    previous_path = tmp_path / "previous.db"
+    previous_connection = sqlite3.connect(previous_path)
+    previous_cursor = previous_connection.cursor()
+    previous_cursor.execute(
+        """
+        CREATE TABLE esri_geocodes (
+            geocode_id TEXT PRIMARY KEY,
+            geocode_type TEXT,
+            address_pid TEXT,
+            centoid_lat REAL,
+            centoid_lon REAL
+        )
+        """
+    )
+    previous_cursor.execute(
+        """
+        INSERT INTO esri_geocodes (
+            geocode_id,
+            geocode_type,
+            address_pid,
+            centoid_lat,
+            centoid_lon
+        )
+        VALUES ('geo-1', 'PC', '100', -27.1, 153.1)
+        """
+    )
+    previous_connection.commit()
+    previous_connection.close()
+
+    connection = sqlite3.connect(":memory:")
+    cursor = connection.cursor()
+    create_tables(cursor)
+    cursor.execute("ATTACH DATABASE ? AS previous", (str(previous_path),))
+
+    main_pls.load_previous_esri_geocodes(cursor)
+
+    assert cursor.execute(
+        """
+        SELECT geocode_id, geocode_type, address_pid, centoid_lat, centoid_lon
+        FROM esri_geocodes
+        """
+    ).fetchone() == ("geo-1", "PC", "100", -27.1, 153.1)
+
+    cursor.execute("DETACH DATABASE previous")
+    connection.close()

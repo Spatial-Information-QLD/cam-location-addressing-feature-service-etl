@@ -229,25 +229,26 @@ def get_layer_url(query_url: str) -> str:
 
 
 def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
-    """Insert geocodes into the PLS database."""
+    """Insert geocodes into the persisted ESRI geocode cache."""
     for feature in features:
         attrs = feature["attributes"]
         geom = feature["geometry"]
 
         cursor.execute(
-            "SELECT * FROM lf_geocode_sp_survey_point WHERE geocode_id = ?",
+            "SELECT * FROM esri_geocodes WHERE geocode_id = ?",
             (attrs["objectid"],),
         )
 
         if cursor.fetchone():
             cursor.execute(
                 """
-                UPDATE lf_geocode_sp_survey_point SET geocode_type = ?, address_pid = ?, site_id = ?, centoid_lat = ?, centoid_lon = ? WHERE geocode_id = ?
+                UPDATE esri_geocodes
+                SET geocode_type = ?, address_pid = ?, centoid_lat = ?, centoid_lon = ?
+                WHERE geocode_id = ?
                 """,
                 (
                     attrs["geocode_type"],
                     attrs["address_pid"],
-                    None,
                     geom["y"],
                     geom["x"],
                     attrs["objectid"],
@@ -256,14 +257,19 @@ def insert_geocodes(cursor: sqlite3.Cursor, features: list[dict[str, Any]]):
         else:
             cursor.execute(
                 """
-                INSERT INTO lf_geocode_sp_survey_point (geocode_id, geocode_type, address_pid, site_id, centoid_lat, centoid_lon)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO esri_geocodes (
+                    geocode_id,
+                    geocode_type,
+                    address_pid,
+                    centoid_lat,
+                    centoid_lon
+                )
+                VALUES (?, ?, ?, ?, ?)
             """,
                 (
                     attrs["objectid"],
                     attrs["geocode_type"],
                     attrs["address_pid"],
-                    None,
                     geom["y"],
                     geom["x"],
                 ),
@@ -477,9 +483,9 @@ def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = Non
         geocode_importer = GeocodeImporter(cursor, client, esri_date)
         if geocode_importer.requires_full_refresh:
             logger.info(
-                "Clearing lf_geocode_sp_survey_point before full geocode refresh because the live layer no longer supports incremental imports"
+                "Clearing esri_geocodes before full geocode refresh because the live layer no longer supports incremental imports"
             )
-            cursor.execute("DELETE FROM lf_geocode_sp_survey_point")
+            cursor.execute("DELETE FROM esri_geocodes")
             cursor.connection.commit()
         geocode_importer.import_geocodes()
 

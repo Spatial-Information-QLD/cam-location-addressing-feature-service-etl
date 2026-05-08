@@ -4,9 +4,8 @@ from address_etl.id_map import text_to_id_for_pk
 from address_etl.pls.tables import (
     build_address_insert_data,
     create_tables,
+    generate_pls_geocodes,
     prune_addresses_without_pid_mapping,
-    prune_geocodes_without_addresses,
-    update_geocode_site_id,
 )
 from address_etl.sqlite_dict_factory import dict_row_factory
 
@@ -228,20 +227,19 @@ def test_id_mapping_cascades_after_geocode_site_update():
         )
         cursor.execute(
             """
-            INSERT INTO lf_geocode_sp_survey_point (
+            INSERT INTO esri_geocodes (
                 geocode_id,
                 geocode_type,
                 address_pid,
-                site_id,
                 centoid_lat,
                 centoid_lon
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?)
             """,
-            ("geo-1", "PC", "pid-1", None, -27.0, 153.0),
+            ("geo-1", "PC", "pid-1", -27.0, 153.0),
         )
         db.commit()
 
-        update_geocode_site_id(cursor)
+        generate_pls_geocodes(cursor)
         assert cursor.execute("PRAGMA foreign_keys").fetchone()["foreign_keys"] == 1
 
         text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)
@@ -268,7 +266,7 @@ def test_id_mapping_cascades_after_geocode_site_update():
         db.close()
 
 
-def test_update_geocode_site_id_and_prune_geocodes_without_addresses():
+def test_generate_pls_geocodes_keeps_unmatched_raw_geocodes():
     db = connection()
     try:
         cursor = db.cursor()
@@ -318,30 +316,157 @@ def test_update_geocode_site_id_and_prune_geocodes_without_addresses():
         )
         cursor.executemany(
             """
-            INSERT INTO lf_geocode_sp_survey_point (
+            INSERT INTO esri_geocodes (
                 geocode_id,
                 geocode_type,
                 address_pid,
-                site_id,
                 centoid_lat,
                 centoid_lon
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?)
             """,
             [
-                ("geo-1", "PC", "100", None, -27.0, 153.0),
-                ("geo-2", "PC", "999", None, -28.0, 152.0),
+                ("geo-1", "PC", "100", -27.0, 153.0),
+                ("geo-2", "PC", "999", -28.0, 152.0),
             ],
         )
         db.commit()
 
-        update_geocode_site_id(cursor)
-        prune_geocodes_without_addresses(cursor)
+        generate_pls_geocodes(cursor)
 
         assert cursor.execute(
             """
             SELECT geocode_id, address_pid, site_id
             FROM lf_geocode_sp_survey_point
             ORDER BY geocode_id
+            """
+        ).fetchall() == [
+            {"geocode_id": "geo-1", "address_pid": "100", "site_id": "site-1"}
+        ]
+        assert cursor.execute(
+            "SELECT geocode_id FROM esri_geocodes ORDER BY geocode_id"
+        ).fetchall() == [{"geocode_id": "geo-1"}, {"geocode_id": "geo-2"}]
+    finally:
+        db.close()
+
+
+def test_generate_pls_geocodes_emits_previously_unmatched_raw_geocode():
+    db = connection()
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            INSERT INTO esri_geocodes (
+                geocode_id,
+                geocode_type,
+                address_pid,
+                centoid_lat,
+                centoid_lon
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            ("geo-1", "PC", "100", -27.0, 153.0),
+        )
+        db.commit()
+
+        generate_pls_geocodes(cursor)
+        assert (
+            cursor.execute("SELECT COUNT(*) AS count FROM esri_geocodes").fetchone()[
+                "count"
+            ]
+            == 1
+        )
+        assert (
+            cursor.execute(
+                "SELECT COUNT(*) AS count FROM lf_geocode_sp_survey_point"
+            ).fetchone()["count"]
+            == 0
+        )
+
+        cursor.execute(
+            "INSERT INTO local_auth (la_code, la_name) VALUES (?, ?)", (1, "LGA")
+        )
+        cursor.execute(
+            """
+            INSERT INTO locality (
+                locality_code,
+                locality_name,
+                locality_type,
+                la_code,
+                state,
+                status
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("LOC", "LOCALITY", "LOC", 1, "QLD", "C"),
+        )
+        cursor.execute(
+            """
+            INSERT INTO lf_road (
+                road_id,
+                road_name,
+                locality_code,
+                road_cat_desc
+            ) VALUES (?, ?, ?, ?)
+            """,
+            ("road-1", "ROAD", "LOC", "R"),
+        )
+        cursor.execute(
+            "INSERT INTO lf_parcel (parcel_id, plan_no, lot_no) VALUES (?, ?, ?)",
+            ("parcel-1", "PLAN", "1"),
+        )
+        cursor.execute(
+            "INSERT INTO lf_site (site_id, site_type, parcel_id) VALUES (?, ?, ?)",
+            ("site-1", "P", "parcel-1"),
+        )
+        cursor.execute(
+            """
+            INSERT INTO lf_address (
+                addr_id,
+                address_pid,
+                parcel_id,
+                addr_status_code,
+                unit_type,
+                unit_no,
+                unit_suffix,
+                level_type,
+                level_no,
+                level_suffix,
+                street_no_first,
+                street_no_first_suffix,
+                street_no_last,
+                street_no_last_suffix,
+                road_id,
+                site_id,
+                location_desc,
+                address_standard
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "addr-1",
+                "100",
+                "parcel-1",
+                "C",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "road-1",
+                "site-1",
+                None,
+                "STD",
+            ),
+        )
+        db.commit()
+
+        generate_pls_geocodes(cursor)
+        assert cursor.execute(
+            """
+            SELECT geocode_id, address_pid, site_id
+            FROM lf_geocode_sp_survey_point
             """
         ).fetchall() == [
             {"geocode_id": "geo-1", "address_pid": "100", "site_id": "site-1"}

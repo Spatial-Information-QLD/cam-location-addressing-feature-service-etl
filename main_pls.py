@@ -12,11 +12,7 @@ from address_etl.dynamodb_lock import get_lock
 from address_etl.geocode import import_geocodes
 from address_etl.kafka import publish_presigned_url
 from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
-from address_etl.pls.tables import (
-    create_tables,
-    populate_tables,
-    prune_geocodes_without_addresses,
-)
+from address_etl.pls.tables import create_tables, populate_tables
 from address_etl.s3 import S3, download_file, get_latest_file, upload_file
 from address_etl.settings import settings
 from address_etl.sqlite_dict_factory import dict_row_factory
@@ -54,6 +50,42 @@ def build_artifact_headers(
         "s3-key": s3_key,
         "presigned-url-expiry-seconds": str(presigned_url_expiry_seconds),
     }
+
+
+def load_previous_esri_geocodes(cursor: sqlite3.Cursor) -> None:
+    """Load the raw geocode cache from an attached previous database when present."""
+    cursor.execute(
+        """
+        SELECT name FROM previous.sqlite_master
+        WHERE type = 'table' AND name = 'esri_geocodes'
+        """
+    )
+    if not cursor.fetchone():
+        logger.info(
+            "Previous ETL has no esri_geocodes table; geocodes will be pulled from the feature service"
+        )
+        return
+
+    logger.info("Loading esri_geocodes from previous ETL")
+    cursor.execute(
+        """
+        INSERT INTO esri_geocodes (
+            geocode_id,
+            geocode_type,
+            address_pid,
+            centoid_lat,
+            centoid_lon
+        )
+        SELECT
+            geocode_id,
+            geocode_type,
+            address_pid,
+            centoid_lat,
+            centoid_lon
+        FROM previous.esri_geocodes
+        """
+    )
+    cursor.connection.commit()
 
 
 def main():
@@ -117,28 +149,7 @@ def main():
                     cursor.fetchone()["start_time"]
                 )
 
-                # Load the previous ETL's geocodes into the geocode table.
-                cursor.execute(
-                    """
-                    INSERT INTO lf_geocode_sp_survey_point (
-                        geocode_id,
-                        geocode_type,
-                        address_pid,
-                        site_id,
-                        centoid_lat,
-                        centoid_lon
-                    )
-                    SELECT
-                        geocode_id,
-                        geocode_type,
-                        address_pid,
-                        NULL,
-                        centoid_lat,
-                        centoid_lon
-                    FROM previous.lf_geocode_sp_survey_point
-                    """
-                )
-                cursor.connection.commit()
+                load_previous_esri_geocodes(cursor)
 
                 # Load the previous ETL's mapping tables
                 map_id_tables = (
@@ -194,7 +205,6 @@ def main():
             import_address_pid_mappings(cursor, previous_etl_start_time)
             import_geocodes(cursor, previous_etl_start_time)
             populate_tables(cursor)
-            prune_geocodes_without_addresses(cursor)
 
             etl_finished_at = datetime.now(pytz.UTC)
             etl_finished_at_brisbane = utc_to_brisbane_time(etl_finished_at)

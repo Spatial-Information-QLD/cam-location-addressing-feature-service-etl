@@ -6,6 +6,7 @@ from address_etl.geocode import (
     build_geocode_where_clause,
     get_geocode_layer_schema,
     get_layer_url,
+    insert_geocodes,
     load_geocode_type_codes,
     normalize_geocode_feature,
     normalize_geocode_type,
@@ -14,6 +15,7 @@ from address_etl.geocode import (
 )
 from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.tables import create_geocode_type_code_table
+from address_etl.pls.tables import create_tables
 
 
 def test_normalize_geocode_type_keeps_legacy_code():
@@ -224,5 +226,62 @@ def test_save_geocode_type_codes_updates_existing_rows():
         assert load_geocode_type_codes(cursor) == {
             "https://linked.data.gov.au/def/geocode-types/property-centroid": "PX"
         }
+    finally:
+        connection.close()
+
+
+def test_insert_geocodes_upserts_into_esri_geocode_cache():
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = dict_row_factory
+    try:
+        cursor = connection.cursor()
+        create_tables(cursor)
+        insert_geocodes(
+            cursor,
+            [
+                {
+                    "attributes": {
+                        "objectid": "geo-1",
+                        "geocode_type": "PC",
+                        "address_pid": "100",
+                    },
+                    "geometry": {"y": -27.0, "x": 153.0},
+                }
+            ],
+        )
+        insert_geocodes(
+            cursor,
+            [
+                {
+                    "attributes": {
+                        "objectid": "geo-1",
+                        "geocode_type": "DF",
+                        "address_pid": "200",
+                    },
+                    "geometry": {"y": -28.0, "x": 152.0},
+                }
+            ],
+        )
+
+        assert cursor.execute(
+            """
+            SELECT geocode_id, geocode_type, address_pid, centoid_lat, centoid_lon
+            FROM esri_geocodes
+            """
+        ).fetchall() == [
+            {
+                "geocode_id": "geo-1",
+                "geocode_type": "DF",
+                "address_pid": "200",
+                "centoid_lat": -28.0,
+                "centoid_lon": 152.0,
+            }
+        ]
+        assert (
+            cursor.execute(
+                "SELECT COUNT(*) AS count FROM lf_geocode_sp_survey_point"
+            ).fetchone()["count"]
+            == 0
+        )
     finally:
         connection.close()
