@@ -1,5 +1,6 @@
 import sqlite3
 
+from address_etl.id_map import text_to_id_for_pk
 from address_etl.pls.tables import (
     build_address_insert_data,
     create_tables,
@@ -17,6 +18,13 @@ def connection():
     create_tables(cursor)
     cursor.execute("PRAGMA foreign_keys = OFF")
     db.commit()
+    return db
+
+
+def connection_with_foreign_keys():
+    db = sqlite3.connect(":memory:")
+    db.row_factory = dict_row_factory
+    create_tables(db.cursor())
     return db
 
 
@@ -153,6 +161,109 @@ def test_prune_addresses_without_pid_mapping():
         assert cursor.execute(
             "SELECT addr_id, address_pid FROM lf_address ORDER BY addr_id"
         ).fetchall() == [{"addr_id": "addr-1", "address_pid": "100"}]
+    finally:
+        db.close()
+
+
+def test_id_mapping_cascades_after_geocode_site_update():
+    db = connection_with_foreign_keys()
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            "INSERT INTO local_auth (la_code, la_name) VALUES (?, ?)", (1, "LGA")
+        )
+        cursor.execute(
+            """
+            INSERT INTO locality (
+                locality_code,
+                locality_name,
+                locality_type,
+                la_code,
+                state,
+                status
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("LOC", "LOCALITY", "LOC", 1, "QLD", "C"),
+        )
+        cursor.execute(
+            """
+            INSERT INTO lf_road (
+                road_id,
+                road_name,
+                locality_code,
+                road_cat_desc
+            ) VALUES (?, ?, ?, ?)
+            """,
+            ("road-iri", "ROAD", "LOC", "R"),
+        )
+        cursor.execute(
+            "INSERT INTO lf_parcel (parcel_id, plan_no, lot_no) VALUES (?, ?, ?)",
+            ("parcel-iri", "PLAN", "1"),
+        )
+        cursor.execute(
+            "INSERT INTO lf_site (site_id, site_type, parcel_id) VALUES (?, ?, ?)",
+            ("site-iri", "P", "parcel-iri"),
+        )
+        cursor.execute(
+            """
+            INSERT INTO lf_address (
+                addr_id,
+                address_pid,
+                parcel_id,
+                addr_status_code,
+                road_id,
+                site_id,
+                address_standard
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "addr-iri",
+                "pid-1",
+                "parcel-iri",
+                "C",
+                "road-iri",
+                "site-iri",
+                "STD",
+            ),
+        )
+        cursor.execute(
+            """
+            INSERT INTO lf_geocode_sp_survey_point (
+                geocode_id,
+                geocode_type,
+                address_pid,
+                site_id,
+                centoid_lat,
+                centoid_lon
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("geo-1", "PC", "pid-1", None, -27.0, 153.0),
+        )
+        db.commit()
+
+        update_geocode_site_id(cursor)
+        assert cursor.execute("PRAGMA foreign_keys").fetchone()["foreign_keys"] == 1
+
+        text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)
+        text_to_id_for_pk("lf_parcel_id_map", "lf_parcel", "parcel_id", cursor)
+        text_to_id_for_pk("lf_site_id_map", "lf_site", "site_id", cursor)
+        text_to_id_for_pk("lf_address_id_map", "lf_address", "addr_id", cursor)
+
+        address_row = cursor.execute(
+            "SELECT addr_id, parcel_id, road_id, site_id FROM lf_address"
+        ).fetchone()
+        geocode_row = cursor.execute(
+            "SELECT geocode_id, site_id FROM lf_geocode_sp_survey_point"
+        ).fetchone()
+
+        assert address_row == {
+            "addr_id": "1",
+            "parcel_id": "1",
+            "road_id": "1",
+            "site_id": "1",
+        }
+        assert geocode_row == {"geocode_id": "geo-1", "site_id": "1"}
+        assert cursor.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:
         db.close()
 

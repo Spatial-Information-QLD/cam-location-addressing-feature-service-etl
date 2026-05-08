@@ -250,7 +250,8 @@ def create_geocode_tables(cursor: sqlite3.Cursor):
             site_id TEXT,
             centoid_lat REAL NOT NULL,
             centoid_lon REAL NOT NULL,
-            hash TEXT
+            hash TEXT,
+            FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
         )
     """
     )
@@ -488,10 +489,22 @@ def optimize_sqlite_for_bulk_inserts(cursor: sqlite3.Cursor):
 
 def restore_sqlite_settings(cursor: sqlite3.Cursor):
     """Restore normal SQLite settings after bulk operations"""
+    cursor.connection.commit()
     cursor.execute("PRAGMA foreign_keys = ON")
     cursor.execute("PRAGMA auto_vacuum = INCREMENTAL")
     cursor.execute("PRAGMA optimize")
     cursor.connection.commit()
+
+
+def ensure_foreign_keys_enabled(cursor: sqlite3.Cursor) -> None:
+    cursor.execute("PRAGMA foreign_keys")
+    row = cursor.fetchone()
+    foreign_keys_enabled = row["foreign_keys"] if isinstance(row, dict) else row[0]
+    if foreign_keys_enabled != 1:
+        raise RuntimeError(
+            "SQLite foreign key enforcement is disabled before ID remapping; "
+            "dependent PLS IDs would not cascade to child tables."
+        )
 
 
 def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
@@ -930,6 +943,8 @@ def populate_tables(cursor: sqlite3.Cursor):
 
         # # This will create the geocode table's index as well
         update_geocode_site_id(cursor)
+
+    ensure_foreign_keys_enabled(cursor)
 
     text_to_id_for_pk("lf_road_id_map", "lf_road", "road_id", cursor)
     text_to_id_for_pk("lf_parcel_id_map", "lf_parcel", "parcel_id", cursor)
