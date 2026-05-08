@@ -3,6 +3,7 @@ import sqlite3
 import pytest
 
 from address_etl.id_map import text_to_id_for_pk
+from address_etl.pls.tables import create_id_map_table
 from address_etl.sqlite_dict_factory import dict_row_factory
 
 
@@ -213,3 +214,38 @@ def test_map_table_with_some_values(connection: sqlite3.Connection):
     for row in results:
         assert int(row["parcel_id"]) == row["id"]
         assert row["iri"].startswith("http")
+
+
+def test_create_id_map_table_relies_on_unique_iri_autoindex():
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = dict_row_factory
+    try:
+        cursor = connection.cursor()
+        create_id_map_table("parcel_id_map", cursor)
+
+        cursor.execute("INSERT INTO parcel_id_map (iri) VALUES (?)", ("parcel-1",))
+        with pytest.raises(sqlite3.IntegrityError):
+            cursor.execute(
+                "INSERT INTO parcel_id_map (iri) VALUES (?)",
+                ("parcel-1",),
+            )
+
+        indexes = cursor.execute("PRAGMA index_list(parcel_id_map)").fetchall()
+        assert [index["name"] for index in indexes] == [
+            "sqlite_autoindex_parcel_id_map_1"
+        ]
+        assert indexes[0]["unique"] == 1
+        assert indexes[0]["origin"] == "u"
+
+        index_columns = cursor.execute(
+            "PRAGMA index_info(sqlite_autoindex_parcel_id_map_1)"
+        ).fetchall()
+        assert [column["name"] for column in index_columns] == ["iri"]
+
+        plan = cursor.execute(
+            "EXPLAIN QUERY PLAN SELECT id FROM parcel_id_map WHERE iri = ?",
+            ("parcel-1",),
+        ).fetchall()
+        assert "sqlite_autoindex_parcel_id_map_1" in plan[0]["detail"]
+    finally:
+        connection.close()

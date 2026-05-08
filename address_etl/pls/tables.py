@@ -39,7 +39,6 @@ def create_id_map_table(table_name: str, cursor: sqlite3.Cursor):
         )
     """
     )
-    cursor.execute(f"CREATE INDEX idx_{table_name}_iri ON {table_name} (iri)")
 
 
 def create_locality_tables(cursor: sqlite3.Cursor):
