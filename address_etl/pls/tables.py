@@ -48,20 +48,9 @@ def create_locality_tables(cursor: sqlite3.Cursor):
         """
         CREATE TABLE local_auth (
             la_code INTEGER PRIMARY KEY,
-            la_name TEXT CHECK (length(la_name) <= 40) NOT NULL,
-            hash TEXT
+            la_name TEXT CHECK (length(la_name) <= 40) NOT NULL
         )
     """
-    )
-
-    logger.info("Creating local_auth_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE local_auth_loaded (
-            la_code INTEGER,
-            loaded BOOLEAN DEFAULT FALSE
-        )
-        """
     )
 
     logger.info("Creating locality table")
@@ -74,20 +63,9 @@ def create_locality_tables(cursor: sqlite3.Cursor):
             la_code INTEGER NOT NULL,
             state TEXT CHECK (state = 'QLD') NOT NULL,
             status TEXT CHECK (length(status) = 1) NOT NULL,
-            hash TEXT,
             FOREIGN KEY (la_code) REFERENCES local_auth(la_code) ON UPDATE CASCADE
         )
     """
-    )
-
-    logger.info("Creating locality_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE locality_loaded (
-            locality_code TEXT,
-            loaded BOOLEAN DEFAULT FALSE
-        )
-        """
     )
 
     cursor.execute("CREATE INDEX idx_locality_la_code ON locality (la_code)")
@@ -105,18 +83,7 @@ def create_road_tables(cursor: sqlite3.Cursor):
             road_name_type TEXT CHECK (length(road_name_type) <= 20),
             locality_code TEXT NOT NULL,
             road_cat_desc TEXT CHECK (length(road_cat_desc) = 1) NOT NULL,
-            hash TEXT,
             FOREIGN KEY (locality_code) REFERENCES locality(locality_code) ON UPDATE CASCADE
-        )
-    """
-    )
-
-    logger.info("Creating lf_road_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE lf_road_loaded (
-            road_id TEXT,
-            loaded BOOLEAN DEFAULT FALSE
         )
     """
     )
@@ -138,20 +105,9 @@ def create_parcel_tables(cursor: sqlite3.Cursor):
         CREATE TABLE lf_parcel (
             parcel_id TEXT PRIMARY KEY,
             plan_no TEXT CHECK (length(plan_no) <= 10),
-            lot_no TEXT CHECK (length(lot_no) <= 5),
-            hash TEXT
+            lot_no TEXT CHECK (length(lot_no) <= 5)
         )
     """
-    )
-
-    logger.info("Creating lf_parcel_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE lf_parcel_loaded (
-            parcel_id TEXT,
-            loaded BOOLEAN DEFAULT FALSE
-        )
-        """
     )
 
     create_id_map_table("lf_parcel_id_map", cursor)
@@ -173,21 +129,10 @@ def create_site_tables(cursor: sqlite3.Cursor):
             parent_site_id TEXT,
             site_type TEXT CHECK (length(site_type) <= 50) NOT NULL,
             parcel_id TEXT NOT NULL,
-            hash TEXT,
             FOREIGN KEY (parent_site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE,
             FOREIGN KEY (parcel_id) REFERENCES lf_parcel(parcel_id) ON UPDATE CASCADE
         )
     """
-    )
-
-    logger.info("Creating lf_site_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE lf_site_loaded (
-            site_id TEXT,
-            loaded BOOLEAN DEFAULT FALSE
-        )
-        """
     )
 
     create_id_map_table("lf_site_id_map", cursor)
@@ -213,18 +158,7 @@ def create_place_name_tables(cursor: sqlite3.Cursor):
             pl_name_type_code TEXT CHECK (length(pl_name_type_code) <= 4) NOT NULL,
             pl_name TEXT CHECK (length(pl_name) <= 60) NOT NULL,
             site_id TEXT NOT NULL,
-            hash TEXT,
             FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
-        )
-    """
-    )
-
-    logger.info("Creating lf_place_name_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE lf_place_name_loaded (
-            place_name_id TEXT,
-            loaded BOOLEAN DEFAULT FALSE
         )
     """
     )
@@ -250,18 +184,7 @@ def create_geocode_tables(cursor: sqlite3.Cursor):
             site_id TEXT,
             centoid_lat REAL NOT NULL,
             centoid_lon REAL NOT NULL,
-            hash TEXT,
             FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
-        )
-    """
-    )
-
-    logger.info("Creating lf_geocode_sp_survey_point_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE lf_geocode_sp_survey_point_loaded (
-            geocode_id TEXT,
-            loaded BOOLEAN DEFAULT FALSE
         )
     """
     )
@@ -302,22 +225,11 @@ def create_address_tables(cursor: sqlite3.Cursor):
             site_id TEXT NOT NULL,
             location_desc TEXT CHECK (length(location_desc) <= 50),
             address_standard TEXT CHECK (length(address_standard) <= 10) NOT NULL,
-            hash TEXT,
             FOREIGN KEY (parcel_id) REFERENCES lf_parcel(parcel_id) ON UPDATE CASCADE,
             FOREIGN KEY (road_id) REFERENCES lf_road(road_id) ON UPDATE CASCADE,
             FOREIGN KEY (site_id) REFERENCES lf_site(site_id) ON UPDATE CASCADE
         )
     """
-    )
-
-    logger.info("Creating lf_address_loaded table")
-    cursor.execute(
-        """
-        CREATE TABLE lf_address_loaded (
-            addr_id TEXT,
-            loaded BOOLEAN DEFAULT FALSE
-        )
-        """
     )
 
     create_id_map_table("lf_address_id_map", cursor)

@@ -324,13 +324,12 @@ def test_update_geocode_site_id_and_prune_geocodes_without_addresses():
                 address_pid,
                 site_id,
                 centoid_lat,
-                centoid_lon,
-                hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                centoid_lon
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
-                ("geo-1", "PC", "100", None, -27.0, 153.0, None),
-                ("geo-2", "PC", "999", None, -28.0, 152.0, None),
+                ("geo-1", "PC", "100", None, -27.0, 153.0),
+                ("geo-2", "PC", "999", None, -28.0, 152.0),
             ],
         )
         db.commit()

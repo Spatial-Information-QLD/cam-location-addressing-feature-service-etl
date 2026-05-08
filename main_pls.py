@@ -120,15 +120,21 @@ def main():
                 # Load the previous ETL's geocodes into the geocode table.
                 cursor.execute(
                     """
-                    INSERT INTO lf_geocode_sp_survey_point
+                    INSERT INTO lf_geocode_sp_survey_point (
+                        geocode_id,
+                        geocode_type,
+                        address_pid,
+                        site_id,
+                        centoid_lat,
+                        centoid_lon
+                    )
                     SELECT
                         geocode_id,
                         geocode_type,
                         address_pid,
                         NULL,
                         centoid_lat,
-                        centoid_lon,
-                        NULL
+                        centoid_lon
                     FROM previous.lf_geocode_sp_survey_point
                     """
                 )
@@ -192,7 +198,9 @@ def main():
 
             etl_finished_at = datetime.now(pytz.UTC)
             etl_finished_at_brisbane = utc_to_brisbane_time(etl_finished_at)
-            etl_finished_at_str = etl_finished_at_brisbane.strftime("%Y-%m-%dT%H:%M:%S%z")
+            etl_finished_at_str = etl_finished_at_brisbane.strftime(
+                "%Y-%m-%dT%H:%M:%S%z"
+            )
             metadata_write_end_time(cursor, etl_finished_at_str)
 
             s3_key = f"{S3_FILE_PREFIX_KEY}{etl_finished_at_str}/pls.db"
