@@ -217,6 +217,9 @@ def main():
                 "%Y-%m-%dT%H:%M:%S%z"
             )
             metadata_write_end_time(cursor, etl_finished_at_str)
+            logger.info("Closing connection to SQLite database before upload")
+            connection.close()
+            connection = None
 
             s3_key = f"{S3_FILE_PREFIX_KEY}{etl_finished_at_str}/pls.db"
             presigned_url = upload_file(
@@ -245,8 +248,9 @@ def main():
             else:
                 logger.info("Kafka publishing disabled; skipping artifact notification")
         finally:
-            logger.info("Closing connection to SQLite database")
-            connection.close()
+            if connection is not None:
+                logger.info("Closing connection to SQLite database")
+                connection.close()
 
 
 if __name__ == "__main__":
