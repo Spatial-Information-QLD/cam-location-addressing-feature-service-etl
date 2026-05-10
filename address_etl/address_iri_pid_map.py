@@ -15,6 +15,8 @@ from address_etl.time_convert import datetime_to_esri_datetime_utc
 
 logger = logging.getLogger(__name__)
 
+ADDRESS_IRI_PID_BATCH_SIZE = 32000
+
 
 @dataclass(frozen=True)
 class AddressIriPidLayerSchema:
@@ -191,7 +193,7 @@ class AddressIriPidImporter:
 
     def import_mappings(self) -> None:
         logger.info(f"Fetching {self.mapping_count} address IRI to PID mappings")
-        batch_size = 2000
+        batch_size = ADDRESS_IRI_PID_BATCH_SIZE
         for offset in range(0, self.mapping_count, batch_size):
             mappings = self.fetch_mappings(offset, batch_size)
             if not mappings:
@@ -219,6 +221,7 @@ class AddressIriPidImporter:
                 )
             ),
             "returnGeometry": "false",
+            "resultType": "standard",
             "resultOffset": offset,
             "resultRecordCount": batch_size,
             "token": self.access_token,

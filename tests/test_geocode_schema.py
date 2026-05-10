@@ -1,8 +1,10 @@
-from datetime import datetime, timezone
 import sqlite3
+from datetime import datetime, timezone
 
 import address_etl.geocode as geocode_module
 from address_etl.geocode import (
+    GEOCODE_BATCH_SIZE,
+    GeocodeImporter,
     GeocodeLayerSchema,
     build_geocode_type_code_query,
     build_geocode_where_clause,
@@ -16,9 +18,9 @@ from address_etl.geocode import (
     parse_geocode_type_code_bindings,
     save_geocode_type_codes,
 )
+from address_etl.pls.tables import create_tables
 from address_etl.sqlite_dict_factory import dict_row_factory
 from address_etl.tables import create_geocode_type_code_table
-from address_etl.pls.tables import create_tables
 
 
 def test_normalize_geocode_type_keeps_legacy_code():
@@ -178,6 +180,71 @@ def test_normalize_geocode_feature_for_new_schema():
         },
         "geometry": {"x": 153.1, "y": -27.6},
     }
+
+
+class FakeGeocodeResponse:
+    text = '{"features":[]}'
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {
+            "features": [
+                {
+                    "attributes": {
+                        "objectid": 1,
+                        "pid": 444541,
+                        "type": "https://linked.data.gov.au/def/geocode-types/property-centroid",
+                    },
+                    "geometry": {"x": 153.1, "y": -27.6},
+                }
+            ]
+        }
+
+
+class FakeGeocodeClient:
+    def __init__(self):
+        self.params = None
+
+    def get(self, _url, params):
+        self.params = params
+        return FakeGeocodeResponse()
+
+
+def test_fetch_geocodes_uses_standard_result_type_and_large_batch():
+    client = FakeGeocodeClient()
+    importer = object.__new__(GeocodeImporter)
+    importer.client = client
+    importer.access_token = "token"
+    importer.where_clause = "1=1"
+    importer.geocode_count = GEOCODE_BATCH_SIZE
+    importer.geocode_type_codes = {
+        "https://linked.data.gov.au/def/geocode-types/property-centroid": "PC"
+    }
+    importer.schema = GeocodeLayerSchema(
+        object_id_field="objectid",
+        address_pid_field="pid",
+        geocode_type_field="type",
+        geocode_source_field="source",
+        geocode_status_field=None,
+        last_edited_field=None,
+    )
+
+    geocodes = importer.fetch_geocodes(0, GEOCODE_BATCH_SIZE)
+
+    assert geocodes == [
+        {
+            "attributes": {
+                "objectid": "1",
+                "address_pid": "444541",
+                "geocode_type": "PC",
+            },
+            "geometry": {"x": 153.1, "y": -27.6},
+        }
+    ]
+    assert client.params["resultType"] == "standard"
+    assert client.params["resultRecordCount"] == 32000
 
 
 def test_get_layer_url_removes_query_suffix():

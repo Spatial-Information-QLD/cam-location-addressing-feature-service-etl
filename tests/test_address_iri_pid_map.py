@@ -1,6 +1,8 @@
 import sqlite3
 
 from address_etl.address_iri_pid_map import (
+    ADDRESS_IRI_PID_BATCH_SIZE,
+    AddressIriPidImporter,
     AddressIriPidLayerSchema,
     build_address_iri_pid_where_clause,
     get_address_iri_pid_layer_schema,
@@ -70,6 +72,61 @@ def test_normalize_address_iri_pid_feature():
         "address_iri": "https://example.com/address/1",
         "address_pid": "444541",
     }
+
+
+class FakeAddressIriPidResponse:
+    text = '{"features":[]}'
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {
+            "features": [
+                {
+                    "attributes": {
+                        "objectid": 7,
+                        "iri": "https://example.com/address/1",
+                        "pid": 444541,
+                    }
+                }
+            ]
+        }
+
+
+class FakeAddressIriPidClient:
+    def __init__(self):
+        self.params = None
+
+    def get(self, _url, params):
+        self.params = params
+        return FakeAddressIriPidResponse()
+
+
+def test_fetch_mappings_uses_standard_result_type_and_large_batch():
+    client = FakeAddressIriPidClient()
+    importer = object.__new__(AddressIriPidImporter)
+    importer.client = client
+    importer.access_token = "token"
+    importer.where_clause = "1=1"
+    importer.schema = AddressIriPidLayerSchema(
+        object_id_field="objectid",
+        address_iri_field="iri",
+        address_pid_field="pid",
+        last_edited_field="last_edited_date",
+    )
+
+    mappings = importer.fetch_mappings(0, ADDRESS_IRI_PID_BATCH_SIZE)
+
+    assert mappings == [
+        {
+            "objectid": "7",
+            "address_iri": "https://example.com/address/1",
+            "address_pid": "444541",
+        }
+    ]
+    assert client.params["resultType"] == "standard"
+    assert client.params["resultRecordCount"] == 32000
 
 
 def test_save_address_pid_mappings_updates_existing_rows():

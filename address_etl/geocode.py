@@ -16,6 +16,7 @@ from address_etl.time_convert import datetime_to_esri_datetime_utc
 
 logger = logging.getLogger(__name__)
 
+GEOCODE_BATCH_SIZE = 32000
 GEOCODE_TYPE_URI_PREFIX = "https://linked.data.gov.au/def/geocode-types/"
 
 
@@ -403,7 +404,7 @@ class GeocodeImporter:
 
     def import_geocodes(self) -> None:
         logger.info(f"Fetching {self.geocode_count} geocodes")
-        batch_size = 2000
+        batch_size = GEOCODE_BATCH_SIZE
         for offset in track(
             range(0, self.geocode_count, batch_size),
             description="Processing geocodes",
@@ -432,6 +433,7 @@ class GeocodeImporter:
                 )
             ),
             "returnGeometry": "true",
+            "resultType": "standard",
             "resultOffset": offset,
             "resultRecordCount": batch_size,
             "token": self.access_token,
