@@ -440,6 +440,39 @@ def ensure_foreign_keys_enabled(cursor: sqlite3.Cursor) -> None:
         )
 
 
+def _foreign_key_violation_value(
+    violation: dict | sqlite3.Row | tuple, key: str, index: int
+) -> str:
+    if isinstance(violation, dict):
+        return str(violation[key])
+    if isinstance(violation, sqlite3.Row):
+        return str(violation[key])
+    return str(violation[index])
+
+
+def _format_foreign_key_violation(violation: dict | sqlite3.Row | tuple) -> str:
+    table = _foreign_key_violation_value(violation, "table", 0)
+    rowid = _foreign_key_violation_value(violation, "rowid", 1)
+    parent = _foreign_key_violation_value(violation, "parent", 2)
+    fkid = _foreign_key_violation_value(violation, "fkid", 3)
+    return f"table={table}, rowid={rowid}, parent={parent}, fkid={fkid}"
+
+
+def validate_foreign_keys(cursor: sqlite3.Cursor) -> None:
+    cursor.connection.commit()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("PRAGMA foreign_key_check")
+    violations = cursor.fetchmany(10)
+    if violations:
+        formatted_violations = "; ".join(
+            _format_foreign_key_violation(violation) for violation in violations
+        )
+        raise RuntimeError(
+            "SQLite foreign key check failed before upload; "
+            f"first {len(violations)} violation(s): {formatted_violations}"
+        )
+
+
 def populate_parcel_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     start_time = time.time()
     logger.info("Fetching parcel data")
@@ -805,9 +838,6 @@ def generate_pls_geocodes(cursor: sqlite3.Cursor):
     )
     logger.info("Generated %s PLS geocode rows", cursor.rowcount)
 
-    logger.info("Checking geocode foreign keys")
-    cursor.execute("PRAGMA foreign_key_check")
-
     restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
@@ -844,3 +874,4 @@ def populate_tables(cursor: sqlite3.Cursor):
     text_to_id_for_pk("lf_site_id_map", "lf_site", "site_id", cursor)
     text_to_id_for_pk("lf_place_name_id_map", "lf_place_name", "place_name_id", cursor)
     text_to_id_for_pk("lf_address_id_map", "lf_address", "addr_id", cursor)
+    validate_foreign_keys(cursor)

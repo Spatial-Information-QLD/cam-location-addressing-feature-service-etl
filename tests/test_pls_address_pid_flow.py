@@ -1,11 +1,14 @@
 import sqlite3
 
+import pytest
+
 from address_etl.id_map import text_to_id_for_pk
 from address_etl.pls.tables import (
     build_address_insert_data,
     create_tables,
     generate_pls_geocodes,
     prune_addresses_without_pid_mapping,
+    validate_foreign_keys,
 )
 from address_etl.sqlite_dict_factory import dict_row_factory
 
@@ -25,6 +28,64 @@ def connection_with_foreign_keys():
     db.row_factory = dict_row_factory
     create_tables(db.cursor())
     return db
+
+
+def test_validate_foreign_keys_rejects_existing_violations_after_reenable():
+    db = connection()
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            INSERT INTO lf_address (
+                addr_id,
+                address_pid,
+                parcel_id,
+                addr_status_code,
+                unit_type,
+                unit_no,
+                unit_suffix,
+                level_type,
+                level_no,
+                level_suffix,
+                street_no_first,
+                street_no_first_suffix,
+                street_no_last,
+                street_no_last_suffix,
+                road_id,
+                site_id,
+                location_desc,
+                address_standard
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "addr-1",
+                "pid-1",
+                "missing-parcel",
+                "C",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "missing-road",
+                "missing-site",
+                None,
+                "STD",
+            ),
+        )
+        db.commit()
+
+        with pytest.raises(RuntimeError, match="SQLite foreign key check failed"):
+            validate_foreign_keys(cursor)
+
+        assert cursor.execute("PRAGMA foreign_keys").fetchone()["foreign_keys"] == 1
+    finally:
+        db.close()
 
 
 def test_build_address_insert_data_skips_unmapped_addresses():
