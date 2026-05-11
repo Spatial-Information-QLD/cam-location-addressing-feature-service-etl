@@ -306,6 +306,14 @@ class GeocodeImporter:
             self.client,
             self.access_token,
         )
+        self.total_geocode_count = self.geocode_count
+        if esri_date and self.schema.supports_incremental_import:
+            self.total_geocode_count = get_count(
+                "1=1",
+                settings.esri_geocode_rest_api_query_url,
+                self.client,
+                self.access_token,
+            )
 
     def fetch_layer_schema(self) -> GeocodeLayerSchema:
         params = {"f": "json", "token": self.access_token}
@@ -494,11 +502,11 @@ def import_geocodes(cursor: sqlite3.Cursor, from_datetime: datetime | None = Non
         cached_geocode_count = cursor.execute(
             "SELECT COUNT(*) AS count FROM esri_geocodes"
         ).fetchone()["count"]
-        if esri_date and cached_geocode_count != geocode_importer.geocode_count:
+        if esri_date and cached_geocode_count != geocode_importer.total_geocode_count:
             logger.warning(
                 "Incremental geocode import left %s cached rows but the live layer has %s; performing a full geocode refresh",
                 cached_geocode_count,
-                geocode_importer.geocode_count,
+                geocode_importer.total_geocode_count,
             )
             cursor.execute("DELETE FROM esri_geocodes")
             cursor.connection.commit()
