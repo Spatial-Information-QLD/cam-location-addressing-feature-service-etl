@@ -36,7 +36,7 @@ def download_file(bucket_name: str, key: str, file_path: str, s3: "S3") -> None:
 
 def get_latest_file(bucket_name: str, s3: "S3", prefix: str = "") -> str | None:
     logger.info(f"Getting latest file from {bucket_name}")
-    objects = s3.list_objects(bucket_name)
+    objects = s3.list_objects(bucket_name, prefix=prefix)
     for obj in objects:
         if obj["Key"].startswith(prefix):
             logger.info(f"Latest file: {obj['Key']}")
@@ -108,11 +108,12 @@ class S3:
             logger.error(traceback.format_exc())
             raise
 
-    def list_objects(self, bucket_name: str) -> list:
+    def list_objects(self, bucket_name: str, prefix: str = "") -> list:
         try:
-            result = self.client.list_objects(Bucket=bucket_name)
-            result = result["Contents"] if "Contents" in result else []
-            return sorted(result, key=lambda x: x["Key"], reverse=True)
+            paginator = self.client.get_paginator("list_objects_v2")
+            pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+            objects = [obj for page in pages for obj in page.get("Contents", [])]
+            return sorted(objects, key=lambda x: x["Key"], reverse=True)
         except boto3.exceptions.Boto3Error as e:
             logger.error(f"Failed to list S3 objects: {str(e)}")
             raise
