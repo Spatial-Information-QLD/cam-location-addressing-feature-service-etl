@@ -24,6 +24,8 @@ def get_query():
                     sdo:propertyID "pndb.lga_name" ;
                     sdo:value ?lga_name
                 ]
+
+                FILTER(STRLEN(STR(?lga_name)) > 0)
             }
         }
         """

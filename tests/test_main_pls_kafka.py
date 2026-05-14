@@ -64,6 +64,10 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
         events.append("metadata_end")
         recorded["metadata_end"] = end_time_str
 
+    def fake_compact_sqlite_database(file_path):
+        events.append("compact")
+        assert file_path == str(tmp_path / "pls.db")
+
     def fake_upload_file(bucket_name, key, file_path, s3, presigned_url_expiry_seconds):
         events.append("upload")
         recorded["upload"] = {
@@ -87,6 +91,9 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
     )
     monkeypatch.setattr(
         main_pls, "metadata_write_end_time", fake_metadata_write_end_time
+    )
+    monkeypatch.setattr(
+        main_pls, "compact_sqlite_database", fake_compact_sqlite_database
     )
     monkeypatch.setattr(main_pls, "upload_file", fake_upload_file)
     monkeypatch.setattr(main_pls, "publish_presigned_url", fake_publish_presigned_url)
@@ -118,7 +125,7 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
 
     assert recorded["metadata_start"] == "2026-04-23T02:00:00+0000"
     assert recorded["metadata_end"] == "2026-04-23T02:02:30+0000"
-    assert events == ["metadata_end", "upload"]
+    assert events == ["metadata_end", "compact", "upload"]
     assert recorded["upload"] == {
         "bucket_name": "pls-feature-service-etl",
         "key": "pls-etl/2026-04-23T02:02:30+0000/pls.db",
@@ -170,6 +177,7 @@ def test_main_skips_kafka_publish_when_disabled(
     monkeypatch.setattr(main_pls, "utc_to_brisbane_time", lambda dt: dt)
     monkeypatch.setattr(main_pls, "metadata_write_start_time", lambda *args: None)
     monkeypatch.setattr(main_pls, "metadata_write_end_time", lambda *args: None)
+    monkeypatch.setattr(main_pls, "compact_sqlite_database", lambda *args: None)
     monkeypatch.setattr(main_pls, "upload_file", fake_upload_file)
     monkeypatch.setattr(main_pls, "publish_presigned_url", fake_publish_presigned_url)
     monkeypatch.setattr(main_pls, "get_latest_file", lambda *args, **kwargs: None)
@@ -245,6 +253,9 @@ def test_main_closes_sqlite_before_uploading_wal_database(monkeypatch, tmp_path)
     monkeypatch.setattr(main_pls, "utc_to_brisbane_time", lambda dt: dt)
     monkeypatch.setattr(main_pls, "metadata_write_start_time", lambda *args: None)
     monkeypatch.setattr(main_pls, "metadata_write_end_time", lambda *args: None)
+    monkeypatch.setattr(
+        main_pls, "compact_sqlite_database", main_pls.compact_sqlite_database
+    )
     monkeypatch.setattr(main_pls, "upload_file", fake_upload_file)
     monkeypatch.setattr(main_pls, "publish_presigned_url", lambda *args: None)
     monkeypatch.setattr(main_pls, "get_latest_file", lambda *args, **kwargs: None)
@@ -277,6 +288,40 @@ def test_main_closes_sqlite_before_uploading_wal_database(monkeypatch, tmp_path)
         "uploaded_count": 5000,
         "wal_exists_at_upload": False,
     }
+
+
+def test_compact_sqlite_database_vacuums_in_place(tmp_path):
+    db_path = tmp_path / "pls.db"
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("CREATE TABLE records (value TEXT)")
+        connection.executemany(
+            "INSERT INTO records (value) VALUES (?)",
+            [("x" * 1000,) for _ in range(5000)],
+        )
+        connection.commit()
+        connection.execute("DELETE FROM records")
+        connection.commit()
+    finally:
+        connection.close()
+
+    size_before = db_path.stat().st_size
+
+    main_pls.compact_sqlite_database(str(db_path))
+
+    size_after = db_path.stat().st_size
+    compacted_connection = sqlite3.connect(db_path)
+    try:
+        assert (
+            compacted_connection.execute("PRAGMA quick_check(1)").fetchone()[0] == "ok"
+        )
+        assert (
+            compacted_connection.execute("SELECT COUNT(*) FROM records").fetchone()[0]
+            == 0
+        )
+    finally:
+        compacted_connection.close()
+    assert size_after < size_before
 
 
 def test_load_previous_esri_geocodes_skips_legacy_pls_geocode_table(tmp_path):

@@ -1,5 +1,5 @@
 from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
-from address_etl.pls.queries import address
+from address_etl.pls.queries import address, local_auth, locality
 
 
 def test_get_query_iris_only_filters_to_current_non_private_addresses():
@@ -40,6 +40,20 @@ def test_get_query_filters_to_current_non_private_addresses():
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
     assert "?address_pid" not in query
+
+
+def test_local_auth_query_excludes_empty_lga_names():
+    query = local_auth.get_query()
+
+    assert "FILTER(STRLEN(STR(?lga_name)) > 0)" in query
+
+
+def test_locality_query_maps_empty_statuses_to_current():
+    query = locality.get_query()
+
+    assert "sdo:value ?_status" in query
+    assert 'BIND(IF(STR(?_status) = "", "Y", ?_status) AS ?status)' in query
+    assert "FILTER(STRLEN(STR(?status)) = 1)" not in query
 
 
 def test_debug_parcel_iris_list_has_expected_size():

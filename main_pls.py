@@ -89,6 +89,26 @@ def load_previous_esri_geocodes(cursor: sqlite3.Cursor) -> bool:
     return True
 
 
+def compact_sqlite_database(db_path: str) -> None:
+    logger.info("Compacting SQLite database before upload")
+    start_time = time.time()
+    before_size = Path(db_path).stat().st_size
+
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("VACUUM")
+    finally:
+        connection.close()
+
+    after_size = Path(db_path).stat().st_size
+    logger.info(
+        "Compacted SQLite database in %.2f seconds; size changed from %.2f MiB to %.2f MiB",
+        time.time() - start_time,
+        before_size / 1024 / 1024,
+        after_size / 1024 / 1024,
+    )
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -220,6 +240,7 @@ def main():
             logger.info("Closing connection to SQLite database before upload")
             connection.close()
             connection = None
+            compact_sqlite_database(settings.pls_sqlite_conn_str)
 
             s3_key = f"{S3_FILE_PREFIX_KEY}{etl_finished_at_str}/pls.db"
             presigned_url = upload_file(

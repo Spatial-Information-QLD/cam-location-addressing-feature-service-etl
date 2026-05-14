@@ -30,7 +30,7 @@ def connection_with_foreign_keys():
     return db
 
 
-def test_validate_foreign_keys_rejects_existing_violations_after_reenable():
+def test_validate_foreign_keys_logs_existing_violations_after_reenable(caplog):
     db = connection()
     try:
         cursor = db.cursor()
@@ -80,10 +80,11 @@ def test_validate_foreign_keys_rejects_existing_violations_after_reenable():
         )
         db.commit()
 
-        with pytest.raises(RuntimeError, match="SQLite foreign key check failed"):
-            validate_foreign_keys(cursor)
+        validate_foreign_keys(cursor)
 
         assert cursor.execute("PRAGMA foreign_keys").fetchone()["foreign_keys"] == 1
+        assert "SQLite foreign key check found violations before upload" in caplog.text
+        assert "table=lf_address" in caplog.text
     finally:
         db.close()
 
