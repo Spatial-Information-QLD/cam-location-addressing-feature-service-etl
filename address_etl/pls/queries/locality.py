@@ -38,8 +38,13 @@ def get_query():
                 ],
                 [
                     sdo:propertyID "pndb.status" ;
-                    sdo:value ?status
+                    sdo:value ?_status
                 ]
+
+                # Some unofficial QALI localities do not exist in PNDB, so their
+                # PNDB fields are empty strings. Treat blank PNDB status as
+                # current for PLS.
+                BIND(IF(STR(?_status) = "", "Y", ?_status) AS ?status)
             }
         }
 
