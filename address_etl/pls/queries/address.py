@@ -32,6 +32,17 @@ def get_query_iris_only(debug: bool = False):
                 SELECT ?addr_iri (MAX(?_start_time) AS ?latest_start_time)
                 WHERE {
                     GRAPH <urn:qali:graph:addresses> {
+                        {% if debug %}
+                        VALUES ?parcel_id {
+                            {% for parcel_iri in DEBUG_PARCEL_IRIS %}
+                            <{{ parcel_iri }}>
+                            {% endfor %}
+                        }
+
+                        ?parcel_id a addr:AddressableObject ;
+                            cn:hasName ?addr_iri .
+                        {% endif %}
+
                         ?addr_iri a addr:Address ;
                             lc:hasLifecycleStage ?lifecycle_stage .
 

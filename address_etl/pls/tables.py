@@ -835,8 +835,8 @@ def generate_pls_geocodes(cursor: sqlite3.Cursor):
             g.geocode_type,
             g.address_pid,
             a.site_id,
-            g.centoid_lat,
-            g.centoid_lon
+            ROUND(g.centoid_lat, 8),
+            ROUND(g.centoid_lon, 8)
         FROM esri_geocodes g
         JOIN lf_address a ON g.address_pid = a.address_pid
         """

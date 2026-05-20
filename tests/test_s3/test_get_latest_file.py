@@ -40,3 +40,17 @@ def test_get_latest_file_passes_prefix_to_s3():
 
     assert result == "pls-etl/2025-05-28T00:00:00+1000/pls.db"
     assert s3.calls == [("test-bucket", "pls-etl/")]
+
+
+def test_get_latest_file_filters_by_suffix():
+    class ZipFirstS3:
+        def list_objects(self, _bucket_name: str, prefix: str = ""):
+            return [
+                {"Key": "pls-etl/2025-05-28T00:00:00+1000/pls.zip"},
+                {"Key": "pls-etl/2025-05-28T00:00:00+1000/pls.db"},
+                {"Key": "pls-etl/2025-05-27T00:00:00+1000/pls.db"},
+            ]
+
+    result = get_latest_file("test-bucket", ZipFirstS3(), "pls-etl/", suffix="/pls.db")
+
+    assert result == "pls-etl/2025-05-28T00:00:00+1000/pls.db"

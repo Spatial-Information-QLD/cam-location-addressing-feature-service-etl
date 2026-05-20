@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from address_etl.dynamodb_lock import get_lock
 from address_etl.geocode import import_geocodes
 from address_etl.kafka import publish_presigned_url
 from address_etl.metadata import metadata_write_end_time, metadata_write_start_time
+from address_etl.pls.csv_export import export_pls_csv_zip
 from address_etl.pls.tables import create_tables, populate_tables
 from address_etl.s3 import S3, download_file, get_latest_file, upload_file
 from address_etl.settings import settings
@@ -153,7 +155,10 @@ def main():
             metadata_write_start_time(cursor, etl_started_at_str)
             # Get the previous ETL's sqlite database from S3
             previous_db = get_latest_file(
-                settings.pls_s3_bucket_name, s3, prefix=S3_FILE_PREFIX_KEY
+                settings.pls_s3_bucket_name,
+                s3,
+                prefix=S3_FILE_PREFIX_KEY,
+                suffix="/pls.db",
             )
             previous_etl_start_time = None
             previous_esri_geocodes_loaded = False
@@ -243,13 +248,26 @@ def main():
             compact_sqlite_database(settings.pls_sqlite_conn_str)
 
             s3_key = f"{S3_FILE_PREFIX_KEY}{etl_finished_at_str}/pls.db"
-            presigned_url = upload_file(
+            upload_file(
                 settings.pls_s3_bucket_name,
                 s3_key,
                 settings.pls_sqlite_conn_str,
                 s3,
                 presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
             )
+
+            csv_zip_s3_key = f"{S3_FILE_PREFIX_KEY}{etl_finished_at_str}/pls.zip"
+            with tempfile.TemporaryDirectory() as temp_dir:
+                csv_zip_path = Path(temp_dir) / "pls.zip"
+                export_pls_csv_zip(settings.pls_sqlite_conn_str, csv_zip_path)
+                presigned_url = upload_file(
+                    settings.pls_s3_bucket_name,
+                    csv_zip_s3_key,
+                    str(csv_zip_path),
+                    s3,
+                    presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
+                )
+
             artifact_uploaded_at = datetime.now(pytz.UTC)
             if settings.kafka_enabled:
                 publish_presigned_url(
@@ -262,7 +280,7 @@ def main():
                             etl_finished_at - etl_started_at
                         ).total_seconds(),
                         s3_bucket=settings.pls_s3_bucket_name,
-                        s3_key=s3_key,
+                        s3_key=csv_zip_s3_key,
                         presigned_url_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
                     ),
                 )

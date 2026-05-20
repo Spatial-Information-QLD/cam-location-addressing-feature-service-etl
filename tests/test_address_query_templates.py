@@ -19,6 +19,20 @@ def test_get_query_iris_only_filters_to_current_non_private_addresses():
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
 
 
+def test_get_query_iris_only_debug_filters_lifecycle_subquery_to_debug_parcels():
+    query = address.get_query_iris_only(debug=True)
+
+    lifecycle_subquery = query[
+        query.index(
+            "SELECT ?addr_iri (MAX(?_start_time) AS ?latest_start_time)"
+        ) : query.index("GROUP BY ?addr_iri")
+    ]
+
+    assert "VALUES ?parcel_id {" in lifecycle_subquery
+    assert "cn:hasName ?addr_iri" in lifecycle_subquery
+    assert f"<{DEBUG_PARCEL_IRIS[0]}>" in lifecycle_subquery
+
+
 def test_get_query_filters_to_current_non_private_addresses():
     query = address.get_query(
         iris=[
