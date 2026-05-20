@@ -34,11 +34,15 @@ def download_file(bucket_name: str, key: str, file_path: str, s3: "S3") -> None:
     s3.download_object_to_file(bucket_name, key, file_path)
 
 
-def get_latest_file(bucket_name: str, s3: "S3", prefix: str = "") -> str | None:
+def get_latest_file(
+    bucket_name: str, s3: "S3", prefix: str = "", suffix: str | None = None
+) -> str | None:
     logger.info(f"Getting latest file from {bucket_name}")
     objects = s3.list_objects(bucket_name, prefix=prefix)
     for obj in objects:
-        if obj["Key"].startswith(prefix):
+        if obj["Key"].startswith(prefix) and (
+            suffix is None or obj["Key"].endswith(suffix)
+        ):
             logger.info(f"Latest file: {obj['Key']}")
             return obj["Key"]
 

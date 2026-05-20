@@ -48,7 +48,7 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
     recorded = {
         "metadata_start": None,
         "metadata_end": None,
-        "upload": None,
+        "uploads": [],
         "publish": None,
     }
 
@@ -70,13 +70,20 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
 
     def fake_upload_file(bucket_name, key, file_path, s3, presigned_url_expiry_seconds):
         events.append("upload")
-        recorded["upload"] = {
-            "bucket_name": bucket_name,
-            "key": key,
-            "file_path": file_path,
-            "presigned_url_expiry_seconds": presigned_url_expiry_seconds,
-        }
-        return "https://example.com/presigned"
+        recorded["uploads"].append(
+            {
+                "bucket_name": bucket_name,
+                "key": key,
+                "file_path": file_path,
+                "presigned_url_expiry_seconds": presigned_url_expiry_seconds,
+            }
+        )
+        return f"https://example.com/presigned/{key.rsplit('/', 1)[-1]}"
+
+    def fake_export_pls_csv_zip(sqlite_db_path, zip_path):
+        events.append("export")
+        assert sqlite_db_path == str(tmp_path / "pls.db")
+        zip_path.write_bytes(b"zip")
 
     def fake_publish_presigned_url(presigned_url, headers):
         recorded["publish"] = {
@@ -95,6 +102,7 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
     monkeypatch.setattr(
         main_pls, "compact_sqlite_database", fake_compact_sqlite_database
     )
+    monkeypatch.setattr(main_pls, "export_pls_csv_zip", fake_export_pls_csv_zip)
     monkeypatch.setattr(main_pls, "upload_file", fake_upload_file)
     monkeypatch.setattr(main_pls, "publish_presigned_url", fake_publish_presigned_url)
     monkeypatch.setattr(main_pls, "get_latest_file", lambda *args, **kwargs: None)
@@ -125,15 +133,19 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
 
     assert recorded["metadata_start"] == "2026-04-23T02:00:00+0000"
     assert recorded["metadata_end"] == "2026-04-23T02:02:30+0000"
-    assert events == ["metadata_end", "compact", "upload"]
-    assert recorded["upload"] == {
+    assert events == ["metadata_end", "compact", "upload", "export", "upload"]
+    assert recorded["uploads"][0] == {
         "bucket_name": "pls-feature-service-etl",
         "key": "pls-etl/2026-04-23T02:02:30+0000/pls.db",
         "file_path": str(tmp_path / "pls.db"),
         "presigned_url_expiry_seconds": 3600,
     }
+    assert recorded["uploads"][1]["bucket_name"] == "pls-feature-service-etl"
+    assert recorded["uploads"][1]["key"] == "pls-etl/2026-04-23T02:02:30+0000/pls.zip"
+    assert recorded["uploads"][1]["file_path"].endswith("/pls.zip")
+    assert recorded["uploads"][1]["presigned_url_expiry_seconds"] == 3600
     assert recorded["publish"] == {
-        "presigned_url": "https://example.com/presigned",
+        "presigned_url": "https://example.com/presigned/pls.zip",
         "headers": {
             "etl-name": "pls",
             "etl-started-at": "2026-04-23T02:00:00+00:00",
@@ -141,7 +153,7 @@ def test_main_publishes_uploaded_presigned_url_to_kafka(
             "artifact-uploaded-at": "2026-04-23T02:02:45+00:00",
             "etl-duration-seconds": "150.000",
             "s3-bucket": "pls-feature-service-etl",
-            "s3-key": "pls-etl/2026-04-23T02:02:30+0000/pls.db",
+            "s3-key": "pls-etl/2026-04-23T02:02:30+0000/pls.zip",
             "presigned-url-expiry-seconds": "3600",
         },
     }
@@ -152,7 +164,7 @@ def test_main_skips_kafka_publish_when_disabled(
     tmp_path,
 ):
     recorded = {
-        "upload": None,
+        "uploads": [],
         "publish_called": False,
     }
 
@@ -162,12 +174,14 @@ def test_main_skips_kafka_publish_when_disabled(
     FakeDatetime.values = iter((start_time, finish_time, upload_time))
 
     def fake_upload_file(bucket_name, key, file_path, s3, presigned_url_expiry_seconds):
-        recorded["upload"] = {
-            "bucket_name": bucket_name,
-            "key": key,
-            "file_path": file_path,
-            "presigned_url_expiry_seconds": presigned_url_expiry_seconds,
-        }
+        recorded["uploads"].append(
+            {
+                "bucket_name": bucket_name,
+                "key": key,
+                "file_path": file_path,
+                "presigned_url_expiry_seconds": presigned_url_expiry_seconds,
+            }
+        )
         return "https://example.com/presigned"
 
     def fake_publish_presigned_url(_presigned_url, _headers):
@@ -178,6 +192,11 @@ def test_main_skips_kafka_publish_when_disabled(
     monkeypatch.setattr(main_pls, "metadata_write_start_time", lambda *args: None)
     monkeypatch.setattr(main_pls, "metadata_write_end_time", lambda *args: None)
     monkeypatch.setattr(main_pls, "compact_sqlite_database", lambda *args: None)
+    monkeypatch.setattr(
+        main_pls,
+        "export_pls_csv_zip",
+        lambda _db_path, zip_path: zip_path.write_bytes(b"zip"),
+    )
     monkeypatch.setattr(main_pls, "upload_file", fake_upload_file)
     monkeypatch.setattr(main_pls, "publish_presigned_url", fake_publish_presigned_url)
     monkeypatch.setattr(main_pls, "get_latest_file", lambda *args, **kwargs: None)
@@ -206,12 +225,16 @@ def test_main_skips_kafka_publish_when_disabled(
 
     main_pls.main()
 
-    assert recorded["upload"] == {
+    assert recorded["uploads"][0] == {
         "bucket_name": "pls-feature-service-etl",
         "key": "pls-etl/2026-04-23T02:02:30+0000/pls.db",
         "file_path": str(tmp_path / "pls.db"),
         "presigned_url_expiry_seconds": 3600,
     }
+    assert recorded["uploads"][1]["bucket_name"] == "pls-feature-service-etl"
+    assert recorded["uploads"][1]["key"] == "pls-etl/2026-04-23T02:02:30+0000/pls.zip"
+    assert recorded["uploads"][1]["file_path"].endswith("/pls.zip")
+    assert recorded["uploads"][1]["presigned_url_expiry_seconds"] == 3600
     assert recorded["publish_called"] is False
 
 
@@ -238,6 +261,9 @@ def test_main_closes_sqlite_before_uploading_wal_database(monkeypatch, tmp_path)
         assert (tmp_path / "pls.db-wal").stat().st_size > 0
 
     def fake_upload_file(bucket_name, key, file_path, s3, presigned_url_expiry_seconds):
+        if key.endswith("/pls.zip"):
+            return "https://example.com/presigned"
+
         wal_path = tmp_path / "pls.db-wal"
         recorded["wal_exists_at_upload"] = wal_path.exists()
         uploaded_connection = sqlite3.connect(file_path)
@@ -255,6 +281,11 @@ def test_main_closes_sqlite_before_uploading_wal_database(monkeypatch, tmp_path)
     monkeypatch.setattr(main_pls, "metadata_write_end_time", lambda *args: None)
     monkeypatch.setattr(
         main_pls, "compact_sqlite_database", main_pls.compact_sqlite_database
+    )
+    monkeypatch.setattr(
+        main_pls,
+        "export_pls_csv_zip",
+        lambda _db_path, zip_path: zip_path.write_bytes(b"zip"),
     )
     monkeypatch.setattr(main_pls, "upload_file", fake_upload_file)
     monkeypatch.setattr(main_pls, "publish_presigned_url", lambda *args: None)
@@ -456,15 +487,25 @@ def test_main_full_pulls_geocodes_when_previous_has_no_raw_cache(
     def fake_import_geocodes(_cursor, previous):
         recorded["geocode_previous"] = previous
 
+    def fake_get_latest_file(_bucket_name, _s3, prefix="", suffix=None):
+        assert prefix == "pls-etl/"
+        assert suffix == "/pls.db"
+        return "old.db"
+
     monkeypatch.setattr(main_pls, "datetime", FakeDatetime)
     monkeypatch.setattr(main_pls, "utc_to_brisbane_time", lambda dt: dt)
     monkeypatch.setattr(main_pls, "download_file", fake_download_file)
-    monkeypatch.setattr(main_pls, "get_latest_file", lambda *args, **kwargs: "old.db")
+    monkeypatch.setattr(main_pls, "get_latest_file", fake_get_latest_file)
     monkeypatch.setattr(
         main_pls, "import_address_pid_mappings", fake_import_address_pid_mappings
     )
     monkeypatch.setattr(main_pls, "import_geocodes", fake_import_geocodes)
     monkeypatch.setattr(main_pls, "populate_tables", lambda cursor: None)
+    monkeypatch.setattr(
+        main_pls,
+        "export_pls_csv_zip",
+        lambda _db_path, zip_path: zip_path.write_bytes(b"zip"),
+    )
     monkeypatch.setattr(
         main_pls, "upload_file", lambda *args, **kwargs: "https://example.com/presigned"
     )
