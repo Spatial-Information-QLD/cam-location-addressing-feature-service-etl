@@ -183,6 +183,48 @@ def test_export_pls_csv_zip_contains_required_no_header_csvs(tmp_path):
         assert local_auth_text == "1,LGA\n"
 
 
+def test_export_pls_csv_zip_formats_geocode_coordinates_to_eight_decimal_places(
+    tmp_path,
+):
+    db_path = tmp_path / "pls.db"
+    zip_path = tmp_path / "pls.zip"
+    connection = sqlite3.connect(db_path)
+    try:
+        cursor = connection.cursor()
+        create_tables(cursor)
+        cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute(
+            """
+            INSERT INTO lf_geocode_sp_survey_point (
+                geocode_id,
+                geocode_type,
+                address_pid,
+                site_id,
+                centoid_lat,
+                centoid_lon
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "2602442",
+                "PC",
+                "pid-1",
+                "369833",
+                -27.707347210000002,
+                153.04088936,
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    export_pls_csv_zip(db_path, zip_path)
+
+    with zipfile.ZipFile(zip_path) as zip_file:
+        assert _read_csv_rows(zip_file, "lf_geocode_sp_survey_point.csv") == [
+            ["2602442", "PC", "369833", "-27.70734721", "153.04088936"]
+        ]
+
+
 def _read_csv_rows(zip_file: zipfile.ZipFile, csv_name: str) -> list[list[str]]:
     csv_text = zip_file.read(csv_name).decode()
     return list(csv.reader(StringIO(csv_text)))
