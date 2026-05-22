@@ -78,6 +78,18 @@ CSV_EXPORTS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("metadata.csv", "metadata", ("id", "start_time", "end_time")),
 )
 
+CSV_QUERY_OVERRIDES: dict[str, str] = {
+    "lf_geocode_sp_survey_point.csv": """
+        SELECT
+            geocode_id,
+            geocode_type,
+            site_id,
+            printf('%.8f', centoid_lat) AS centoid_lat,
+            printf('%.8f', centoid_lon) AS centoid_lon
+        FROM lf_geocode_sp_survey_point
+    """,
+}
+
 
 def export_pls_csv_zip(sqlite_db_path: str | Path, zip_path: str | Path) -> None:
     sqlite_db_path = Path(sqlite_db_path)
@@ -92,7 +104,13 @@ def export_pls_csv_zip(sqlite_db_path: str | Path, zip_path: str | Path) -> None
             cursor = connection.cursor()
             for csv_name, table_name, columns in CSV_EXPORTS:
                 csv_path = csv_dir / csv_name
-                _export_csv(cursor, table_name, columns, csv_path)
+                _export_csv(
+                    cursor,
+                    table_name,
+                    columns,
+                    csv_path,
+                    query=CSV_QUERY_OVERRIDES.get(csv_name),
+                )
 
             with zipfile.ZipFile(
                 zip_path, "w", compression=zipfile.ZIP_DEFLATED
@@ -106,10 +124,16 @@ def export_pls_csv_zip(sqlite_db_path: str | Path, zip_path: str | Path) -> None
 
 
 def _export_csv(
-    cursor: sqlite3.Cursor, table_name: str, columns: tuple[str, ...], csv_path: Path
+    cursor: sqlite3.Cursor,
+    table_name: str,
+    columns: tuple[str, ...],
+    csv_path: Path,
+    query: str | None = None,
 ) -> None:
-    column_sql = ", ".join(columns)
-    cursor.execute(f"SELECT {column_sql} FROM {table_name}")
+    if query is None:
+        column_sql = ", ".join(columns)
+        query = f"SELECT {column_sql} FROM {table_name}"
+    cursor.execute(query)
 
     with csv_path.open("w", newline="") as csv_file:
         writer = csv.writer(csv_file, lineterminator="\n")
