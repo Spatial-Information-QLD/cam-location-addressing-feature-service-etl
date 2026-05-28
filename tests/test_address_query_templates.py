@@ -10,6 +10,7 @@ from address_etl.pls.queries import (
     site,
 )
 from address_etl.pls.tables import filter_address_iris_to_loaded_parcels
+from address_etl.sqlite_dict_factory import dict_row_factory
 
 VALID_PARCEL_FILTERS = (
     "FILTER(STRLEN(STR(?plan_no)) <= 10)",
@@ -85,6 +86,7 @@ def test_get_query_filters_to_current_non_private_addresses():
 
 def test_filter_address_iris_to_loaded_parcels_uses_existing_parcel_filter():
     conn = sqlite3.connect(":memory:")
+    conn.row_factory = dict_row_factory
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE lf_parcel (parcel_id TEXT PRIMARY KEY)")
     cursor.execute("INSERT INTO lf_parcel (parcel_id) VALUES (?)", ("parcel-1",))
