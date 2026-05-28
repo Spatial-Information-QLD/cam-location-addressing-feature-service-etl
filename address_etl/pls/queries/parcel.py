@@ -3,6 +3,7 @@ from textwrap import dedent
 from jinja2 import Template
 
 from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
+from address_etl.pls.queries.parcel_constraints import valid_parcel_identifier_filters
 
 
 def get_query_iris_only(debug: bool = False):
@@ -10,6 +11,7 @@ def get_query_iris_only(debug: bool = False):
         dedent(
             """
         PREFIX addr: <https://linked.data.gov.au/def/addr/>
+        PREFIX sdo: <https://schema.org/>
 
         SELECT ?parcel_id
         WHERE {
@@ -22,12 +24,19 @@ def get_query_iris_only(debug: bool = False):
             {% endif %}
                 
             GRAPH <urn:qali:graph:addresses> {
-                ?parcel_id a addr:AddressableObject .
+                ?parcel_id a addr:AddressableObject ;
+                    sdo:identifier ?plan_no, ?_lot_no .
+
+                {{ valid_parcel_identifier_filters }}
             }
         }
         """
         )
-    ).render(debug=debug, DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS)
+    ).render(
+        debug=debug,
+        DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS,
+        valid_parcel_identifier_filters=valid_parcel_identifier_filters(),
+    )
 
 
 def get_query(iris: list[str] = None):
@@ -51,8 +60,7 @@ def get_query(iris: list[str] = None):
                 ?parcel_id a addr:AddressableObject ;
                 sdo:identifier ?plan_no, ?_lot_no .
 
-                FILTER(DATATYPE(?plan_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/plan>)
-                FILTER(DATATYPE(?_lot_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/lot>)
+                {{ valid_parcel_identifier_filters }}
 
                 # If it's a "0" with datatype of lot, then bind it as "9999"
                 BIND(
@@ -70,4 +78,6 @@ def get_query(iris: list[str] = None):
         }
         """
         )
-    ).render(iris=iris)
+    ).render(
+        iris=iris, valid_parcel_identifier_filters=valid_parcel_identifier_filters()
+    )

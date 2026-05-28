@@ -3,6 +3,7 @@ from textwrap import dedent
 from jinja2 import Template
 
 from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
+from address_etl.pls.queries.parcel_constraints import valid_parcel_identifier_filters
 
 
 def get_query_iris_only(debug: bool = False):
@@ -26,14 +27,21 @@ def get_query_iris_only(debug: bool = False):
         
             GRAPH <urn:qali:graph:addresses> {
                 ?parcel_id a addr:AddressableObject ;
+                sdo:identifier ?plan_no, ?_lot_no ;
                 cn:hasName ?addr_iri .
+
+                {{ valid_parcel_identifier_filters }}
 
                 ?addr_iri a addr:Address
             }
         }
         """
         )
-    ).render(debug=debug, DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS)
+    ).render(
+        debug=debug,
+        DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS,
+        valid_parcel_identifier_filters=valid_parcel_identifier_filters(),
+    )
 
 
 def get_query(iris: list):
@@ -59,6 +67,12 @@ def get_query(iris: list):
                     {% endfor %}
                 }
 
+                ?parcel_id a addr:AddressableObject ;
+                    sdo:identifier ?plan_no, ?_lot_no ;
+                    cn:hasName ?addr_iri .
+
+                {{ valid_parcel_identifier_filters }}
+
                 # property name
                 ?addr_iri sdo:hasPart [
                         sdo:additionalType apt:propertyName ;
@@ -72,4 +86,6 @@ def get_query(iris: list):
         }
         """
         )
-    ).render(iris=iris)
+    ).render(
+        iris=iris, valid_parcel_identifier_filters=valid_parcel_identifier_filters()
+    )

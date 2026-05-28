@@ -3,6 +3,7 @@ from textwrap import dedent
 from jinja2 import Template
 
 from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
+from address_etl.pls.queries.parcel_constraints import valid_parcel_identifier_filters
 
 
 def get_query_iris_only(debug: bool = False):
@@ -25,14 +26,21 @@ def get_query_iris_only(debug: bool = False):
 
             GRAPH <urn:qali:graph:addresses> {
                 ?parcel_id a addr:AddressableObject ;
+                           sdo:identifier ?plan_no, ?_lot_no ;
                            cn:hasName ?address .
+
+                {{ valid_parcel_identifier_filters }}
                 
                 ?address a addr:Address .
             }
         }
         """
         )
-    ).render(debug=debug, DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS)
+    ).render(
+        debug=debug,
+        DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS,
+        valid_parcel_identifier_filters=valid_parcel_identifier_filters(),
+    )
 
 
 def get_query(iris: list = None):
@@ -57,8 +65,7 @@ def get_query(iris: list = None):
                 ?parcel_id a addr:AddressableObject ;
                 sdo:identifier ?plan_no, ?_lot_no .
 
-                FILTER(DATATYPE(?plan_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/plan>)
-                FILTER(DATATYPE(?_lot_no) = <https://linked.data.gov.au/dataset/qld-addr/datatype/lot>).
+                {{ valid_parcel_identifier_filters }}
 
                 ?parcel_id cn:hasName ?address .
                 ?address a addr:Address .
@@ -85,4 +92,6 @@ def get_query(iris: list = None):
         }
         """
         )
-    ).render(iris=iris)
+    ).render(
+        iris=iris, valid_parcel_identifier_filters=valid_parcel_identifier_filters()
+    )
