@@ -1,5 +1,22 @@
 from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
-from address_etl.pls.queries import address, local_auth, locality
+from address_etl.pls.queries import (
+    address,
+    local_auth,
+    locality,
+    parcel,
+    place_name,
+    site,
+)
+
+VALID_PARCEL_FILTERS = (
+    "FILTER(STRLEN(STR(?plan_no)) <= 10)",
+    "FILTER(STRLEN(STR(?_lot_no)) <= 5)",
+)
+
+
+def assert_valid_parcel_identifier_filters(query: str):
+    for expected_filter in VALID_PARCEL_FILTERS:
+        assert expected_filter in query
 
 
 def test_get_query_iris_only_filters_to_current_non_private_addresses():
@@ -17,6 +34,7 @@ def test_get_query_iris_only_filters_to_current_non_private_addresses():
     assert "?latest_lifecycle_stage time:hasEnd ?end_time" in query
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
+    assert_valid_parcel_identifier_filters(query)
 
 
 def test_get_query_iris_only_debug_filters_lifecycle_subquery_to_debug_parcels():
@@ -54,6 +72,42 @@ def test_get_query_filters_to_current_non_private_addresses():
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
     assert "?address_pid" not in query
+    assert_valid_parcel_identifier_filters(query)
+
+
+def test_parcel_queries_filter_to_valid_parcel_identifiers():
+    assert_valid_parcel_identifier_filters(parcel.get_query_iris_only())
+    assert_valid_parcel_identifier_filters(
+        parcel.get_query(iris=["https://example.com/parcel/1"])
+    )
+
+
+def test_site_queries_filter_to_valid_parcel_identifiers():
+    assert_valid_parcel_identifier_filters(site.get_query_iris_only())
+    assert_valid_parcel_identifier_filters(
+        site.get_query(
+            iris=[
+                {
+                    "parcel_id": "https://example.com/parcel/1",
+                    "address": "https://example.com/address/1",
+                }
+            ]
+        )
+    )
+
+
+def test_place_name_queries_filter_to_valid_parcel_identifiers():
+    assert_valid_parcel_identifier_filters(place_name.get_query_iris_only())
+    assert_valid_parcel_identifier_filters(
+        place_name.get_query(
+            iris=[
+                {
+                    "parcel_id": "https://example.com/parcel/1",
+                    "addr_iri": "https://example.com/address/1",
+                }
+            ]
+        )
+    )
 
 
 def test_local_auth_query_excludes_empty_lga_names():
