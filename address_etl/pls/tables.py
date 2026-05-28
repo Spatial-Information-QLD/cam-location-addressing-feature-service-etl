@@ -751,7 +751,10 @@ def filter_address_iris_to_loaded_parcels(
 ) -> list[dict[str, str]]:
     iris_rows = iris if isinstance(iris, list) else list(iris)
     cursor.execute("SELECT parcel_id FROM lf_parcel")
-    loaded_parcel_ids = {row[0] for row in cursor.fetchall()}
+    loaded_parcel_ids = {
+        row["parcel_id"] if isinstance(row, dict) else row[0]
+        for row in cursor.fetchall()
+    }
 
     filtered_iris = [
         row for row in iris_rows if row.get("parcel_id") in loaded_parcel_ids
