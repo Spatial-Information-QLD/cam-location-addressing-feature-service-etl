@@ -1,3 +1,5 @@
+import sqlite3
+
 from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
 from address_etl.pls.queries import (
     address,
@@ -7,6 +9,7 @@ from address_etl.pls.queries import (
     place_name,
     site,
 )
+from address_etl.pls.tables import filter_address_iris_to_loaded_parcels
 
 VALID_PARCEL_FILTERS = (
     "FILTER(STRLEN(STR(?plan_no)) <= 10)",
@@ -17,6 +20,11 @@ VALID_PARCEL_FILTERS = (
 def assert_valid_parcel_identifier_filters(query: str):
     for expected_filter in VALID_PARCEL_FILTERS:
         assert expected_filter in query
+
+
+def assert_no_valid_parcel_identifier_filters(query: str):
+    for expected_filter in VALID_PARCEL_FILTERS:
+        assert expected_filter not in query
 
 
 def test_get_query_iris_only_filters_to_current_non_private_addresses():
@@ -34,7 +42,7 @@ def test_get_query_iris_only_filters_to_current_non_private_addresses():
     assert "?latest_lifecycle_stage time:hasEnd ?end_time" in query
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
-    assert_valid_parcel_identifier_filters(query)
+    assert_no_valid_parcel_identifier_filters(query)
 
 
 def test_get_query_iris_only_debug_filters_lifecycle_subquery_to_debug_parcels():
@@ -72,7 +80,24 @@ def test_get_query_filters_to_current_non_private_addresses():
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
     assert "?address_pid" not in query
-    assert_valid_parcel_identifier_filters(query)
+    assert_no_valid_parcel_identifier_filters(query)
+
+
+def test_filter_address_iris_to_loaded_parcels_uses_existing_parcel_filter():
+    conn = sqlite3.connect(":memory:")
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE lf_parcel (parcel_id TEXT PRIMARY KEY)")
+    cursor.execute("INSERT INTO lf_parcel (parcel_id) VALUES (?)", ("parcel-1",))
+
+    filtered = filter_address_iris_to_loaded_parcels(
+        [
+            {"addr_iri": "address-1", "parcel_id": "parcel-1"},
+            {"addr_iri": "address-2", "parcel_id": "parcel-2"},
+        ],
+        cursor,
+    )
+
+    assert filtered == [{"addr_iri": "address-1", "parcel_id": "parcel-1"}]
 
 
 def test_parcel_queries_filter_to_valid_parcel_identifiers():

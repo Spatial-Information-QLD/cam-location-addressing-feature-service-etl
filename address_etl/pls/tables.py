@@ -692,6 +692,7 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
         }
         for row in response.json()["results"]["bindings"]
     ]
+    iris = filter_address_iris_to_loaded_parcels(iris, cursor)
     total_iris = len(iris)
     logger.info(f"Found {total_iris} address ids")
 
@@ -743,6 +744,26 @@ def populate_address_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     restore_sqlite_settings(cursor)
 
     logger.info(f"Time taken: {time.time() - start_time:.2f} seconds")
+
+
+def filter_address_iris_to_loaded_parcels(
+    iris: Iterable[dict[str, str]], cursor: sqlite3.Cursor
+) -> list[dict[str, str]]:
+    iris_rows = iris if isinstance(iris, list) else list(iris)
+    cursor.execute("SELECT parcel_id FROM lf_parcel")
+    loaded_parcel_ids = {row[0] for row in cursor.fetchall()}
+
+    filtered_iris = [
+        row for row in iris_rows if row.get("parcel_id") in loaded_parcel_ids
+    ]
+    skipped_count = len(iris_rows) - len(filtered_iris)
+    if skipped_count:
+        logger.warning(
+            "Skipped %s address ids because their parcels were not loaded after parcel identifier filtering",
+            skipped_count,
+        )
+
+    return filtered_iris
 
 
 def load_address_pid_mappings_for_rows(
