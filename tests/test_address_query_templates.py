@@ -140,6 +140,8 @@ def test_place_name_queries_filter_to_valid_parcel_identifiers():
 def test_local_auth_query_excludes_empty_lga_names():
     query = local_auth.get_query()
 
+    assert "sdo:value ?_lga_name" in query
+    assert "BIND(UCASE(STR(?_lga_name)) AS ?lga_name)" in query
     assert "FILTER(STRLEN(STR(?lga_name)) > 0)" in query
 
 

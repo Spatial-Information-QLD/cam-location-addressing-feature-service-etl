@@ -1,10 +1,9 @@
 import sqlite3
 
-import pytest
-
 from address_etl.id_map import text_to_id_for_pk
 from address_etl.pls.tables import (
     build_address_insert_data,
+    build_local_auth_insert_data,
     create_tables,
     generate_pls_geocodes,
     prune_addresses_without_pid_mapping,
@@ -87,6 +86,17 @@ def test_validate_foreign_keys_logs_existing_violations_after_reenable(caplog):
         assert "table=lf_address" in caplog.text
     finally:
         db.close()
+
+
+def test_build_local_auth_insert_data_uppercases_lga_names():
+    rows = [
+        {
+            "la_code": {"value": "1"},
+            "lga_name": {"value": "Brisbane City"},
+        }
+    ]
+
+    assert build_local_auth_insert_data(rows) == [("1", "BRISBANE CITY")]
 
 
 def test_build_address_insert_data_skips_unmapped_addresses():
