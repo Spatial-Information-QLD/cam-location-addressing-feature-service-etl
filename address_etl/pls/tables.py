@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 2000
 
 
+def build_local_auth_insert_data(rows: Iterable[dict]) -> list[tuple[str, str]]:
+    return [(row["la_code"]["value"], row["lga_name"]["value"].upper()) for row in rows]
+
+
 def create_id_map_table(table_name: str, cursor: sqlite3.Cursor):
     logger.info(f"Creating {table_name} table")
     cursor.execute(
@@ -295,7 +299,7 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     rows = response.json()["results"]["bindings"]
     logger.info(f"Found {len(rows)} local_auth rows")
 
-    insert_data = [(row["la_code"]["value"], row["lga_name"]["value"]) for row in rows]
+    insert_data = build_local_auth_insert_data(rows)
 
     cursor.executemany(
         "INSERT INTO local_auth (la_code, la_name) VALUES (?, ?)", insert_data
