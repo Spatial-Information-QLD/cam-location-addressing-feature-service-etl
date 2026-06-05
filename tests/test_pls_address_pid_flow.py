@@ -4,6 +4,7 @@ from address_etl.id_map import text_to_id_for_pk
 from address_etl.pls.tables import (
     build_address_insert_data,
     build_local_auth_insert_data,
+    build_locality_insert_data,
     create_tables,
     generate_pls_geocodes,
     prune_addresses_without_pid_mapping,
@@ -97,6 +98,32 @@ def test_build_local_auth_insert_data_uppercases_lga_names():
     ]
 
     assert build_local_auth_insert_data(rows) == [("1", "BRISBANE CITY")]
+
+
+def test_build_locality_insert_data_maps_current_status_to_pls_code():
+    rows = [
+        {
+            "locality_code": {"value": "LOC-1"},
+            "locality_name": {"value": "Locality One"},
+            "locality_type": {"value": "LOC"},
+            "la_code": {"value": "1"},
+            "state": {"value": "QLD"},
+            "status": {"value": "Y"},
+        },
+        {
+            "locality_code": {"value": "LOC-2"},
+            "locality_name": {"value": "Locality Two"},
+            "locality_type": {"value": "LOC"},
+            "la_code": {"value": "2"},
+            "state": {"value": "QLD"},
+            "status": {"value": "H"},
+        },
+    ]
+
+    assert build_locality_insert_data(rows) == [
+        ("LOC-1", "Locality One", "LOC", "1", "QLD", "C"),
+        ("LOC-2", "Locality Two", "LOC", "2", "QLD", "H"),
+    ]
 
 
 def test_build_address_insert_data_skips_unmapped_addresses():
