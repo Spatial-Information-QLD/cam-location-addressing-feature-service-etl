@@ -33,6 +33,26 @@ def build_local_auth_insert_data(rows: Iterable[dict]) -> list[tuple[str, str]]:
     return [(row["la_code"]["value"], row["lga_name"]["value"].upper()) for row in rows]
 
 
+def map_locality_status(status: str) -> str:
+    return "C" if status == "Y" else status
+
+
+def build_locality_insert_data(
+    rows: Iterable[dict],
+) -> list[tuple[str, str, str, str, str, str]]:
+    return [
+        (
+            row["locality_code"]["value"],
+            row["locality_name"]["value"],
+            row["locality_type"]["value"],
+            row["la_code"]["value"],
+            row["state"]["value"],
+            map_locality_status(row["status"]["value"]),
+        )
+        for row in rows
+    ]
+
+
 def create_id_map_table(table_name: str, cursor: sqlite3.Cursor):
     logger.info(f"Creating {table_name} table")
     cursor.execute(
@@ -313,17 +333,7 @@ def populate_locality_tables(client: httpx.Client, cursor: sqlite3.Cursor):
     rows = response.json()["results"]["bindings"]
     logger.info(f"Found {len(rows)} locality rows")
 
-    insert_data = [
-        (
-            row["locality_code"]["value"],
-            row["locality_name"]["value"],
-            row["locality_type"]["value"],
-            row["la_code"]["value"],
-            row["state"]["value"],
-            row["status"]["value"],
-        )
-        for row in rows
-    ]
+    insert_data = build_locality_insert_data(rows)
 
     cursor.executemany(
         "INSERT INTO locality (locality_code, locality_name, locality_type, la_code, state, status) VALUES (?, ?, ?, ?, ?, ?)",
