@@ -5,7 +5,46 @@ from jinja2 import Template
 from address_etl.pls.debug_parcels import DEBUG_PARCEL_IRIS
 
 
+def _lifecycle_start_time_clause(
+    *,
+    lifecycle_stage_variable: str,
+    beginning_variable: str,
+    start_time_variable: str,
+    start_date_variable: str,
+) -> str:
+    return dedent(
+        f"""
+        {lifecycle_stage_variable} time:hasBeginning {beginning_variable} .
+
+        {{
+            {beginning_variable} time:inXSDDateTime {start_time_variable} .
+        }}
+        UNION
+        {{
+            {beginning_variable} time:inXSDDate {start_date_variable} .
+            BIND(
+                xsd:dateTime(CONCAT(STR({start_date_variable}), "T00:00:00"))
+                AS {start_time_variable}
+            )
+        }}
+        """
+    ).strip()
+
+
 def get_query_iris_only(debug: bool = False):
+    lifecycle_start_time_clause = _lifecycle_start_time_clause(
+        lifecycle_stage_variable="?lifecycle_stage",
+        beginning_variable="?_beginning",
+        start_time_variable="?_start_time",
+        start_date_variable="?_start_date",
+    )
+    latest_lifecycle_start_time_clause = _lifecycle_start_time_clause(
+        lifecycle_stage_variable="?latest_lifecycle_stage",
+        beginning_variable="?latest_beginning",
+        start_time_variable="?latest_lifecycle_start_time",
+        start_date_variable="?latest_lifecycle_start_date",
+    )
+
     return Template(
         dedent(
             """
@@ -17,6 +56,7 @@ def get_query_iris_only(debug: bool = False):
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
         PREFIX time: <http://www.w3.org/2006/time#>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
         SELECT DISTINCT ?addr_iri ?parcel_id ?road ?locality_code ?_road_name
         WHERE {
@@ -46,8 +86,8 @@ def get_query_iris_only(debug: bool = False):
                         ?addr_iri a addr:Address ;
                             lc:hasLifecycleStage ?lifecycle_stage .
 
-                        ?lifecycle_stage sdo:additionalType ?lifecycle_stage_type ;
-                            time:hasBeginning/time:inXSDDateTime ?_start_time .
+                        ?lifecycle_stage sdo:additionalType ?lifecycle_stage_type .
+                        {{ lifecycle_start_time_clause }}
 
                         FILTER NOT EXISTS {
                             ?lifecycle_stage time:hasEnd ?end_time
@@ -65,8 +105,8 @@ def get_query_iris_only(debug: bool = False):
                     lc:hasLifecycleStage ?latest_lifecycle_stage .
 
                 ?latest_lifecycle_stage
-                    sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> ;
-                    time:hasBeginning/time:inXSDDateTime ?latest_start_time .
+                    sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> .
+                {{ latest_lifecycle_start_time_clause }}
 
                 FILTER NOT EXISTS {
                     ?latest_lifecycle_stage time:hasEnd ?end_time
@@ -99,6 +139,8 @@ def get_query_iris_only(debug: bool = False):
                 }
             }
 
+            FILTER(?latest_lifecycle_start_time = ?latest_start_time)
+
             FILTER NOT EXISTS {
                 GRAPH <urn:qali:graph:tags> {
                     ?addr_iri sdo:keywords ?private_tag .
@@ -111,10 +153,25 @@ def get_query_iris_only(debug: bool = False):
     ).render(
         debug=debug,
         DEBUG_PARCEL_IRIS=DEBUG_PARCEL_IRIS,
+        lifecycle_start_time_clause=lifecycle_start_time_clause,
+        latest_lifecycle_start_time_clause=latest_lifecycle_start_time_clause,
     )
 
 
 def get_query(iris: list = None):
+    lifecycle_start_time_clause = _lifecycle_start_time_clause(
+        lifecycle_stage_variable="?lifecycle_stage",
+        beginning_variable="?_beginning",
+        start_time_variable="?_start_time",
+        start_date_variable="?_start_date",
+    )
+    latest_lifecycle_start_time_clause = _lifecycle_start_time_clause(
+        lifecycle_stage_variable="?latest_lifecycle_stage",
+        beginning_variable="?latest_beginning",
+        start_time_variable="?latest_lifecycle_start_time",
+        start_date_variable="?latest_lifecycle_start_date",
+    )
+
     return Template(
         dedent(
             """
@@ -126,6 +183,7 @@ def get_query(iris: list = None):
         PREFIX sdo: <https://schema.org/>
         PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
         PREFIX time: <http://www.w3.org/2006/time#>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
         SELECT
             ?addr_iri
@@ -170,8 +228,8 @@ def get_query(iris: list = None):
                         ?addr_iri a addr:Address ;
                             lc:hasLifecycleStage ?lifecycle_stage .
 
-                        ?lifecycle_stage sdo:additionalType ?lifecycle_stage_type ;
-                            time:hasBeginning/time:inXSDDateTime ?_start_time .
+                        ?lifecycle_stage sdo:additionalType ?lifecycle_stage_type .
+                        {{ lifecycle_start_time_clause }}
 
                         FILTER NOT EXISTS {
                             ?lifecycle_stage time:hasEnd ?end_time
@@ -190,8 +248,8 @@ def get_query(iris: list = None):
                     lc:hasLifecycleStage ?latest_lifecycle_stage .
 
                 ?latest_lifecycle_stage
-                    sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> ;
-                    time:hasBeginning/time:inXSDDateTime ?latest_start_time .
+                    sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> .
+                {{ latest_lifecycle_start_time_clause }}
 
                 FILTER NOT EXISTS {
                     ?latest_lifecycle_stage time:hasEnd ?end_time
@@ -342,6 +400,8 @@ def get_query(iris: list = None):
                 BIND(CONCAT(STR(?addr_iri), "/", ?road_id, "/", STR(?parcel_id)) AS ?addr_id)
             }
 
+            FILTER(?latest_lifecycle_start_time = ?latest_start_time)
+
             FILTER NOT EXISTS {
                 GRAPH <urn:qali:graph:tags> {
                     ?addr_iri sdo:keywords ?private_tag .
@@ -351,4 +411,8 @@ def get_query(iris: list = None):
         }
         """
         )
-    ).render(iris=iris)
+    ).render(
+        iris=iris,
+        lifecycle_start_time_clause=lifecycle_start_time_clause,
+        latest_lifecycle_start_time_clause=latest_lifecycle_start_time_clause,
+    )

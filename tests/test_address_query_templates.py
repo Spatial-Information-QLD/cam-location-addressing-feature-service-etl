@@ -28,6 +28,17 @@ def assert_no_valid_parcel_identifier_filters(query: str):
         assert expected_filter not in query
 
 
+def assert_lifecycle_date_time_support(query: str):
+    assert "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>" in query
+    assert "time:inXSDDateTime ?_start_time" in query
+    assert "time:inXSDDate ?_start_date" in query
+    assert "time:inXSDDateTime ?latest_lifecycle_start_time" in query
+    assert "time:inXSDDate ?latest_lifecycle_start_date" in query
+    assert 'CONCAT(STR(?_start_date), "T00:00:00")' in query
+    assert 'CONCAT(STR(?latest_lifecycle_start_date), "T00:00:00")' in query
+    assert "FILTER(?latest_lifecycle_start_time = ?latest_start_time)" in query
+
+
 def test_get_query_iris_only_filters_to_current_non_private_addresses():
     query = address.get_query_iris_only()
 
@@ -36,13 +47,14 @@ def test_get_query_iris_only_filters_to_current_non_private_addresses():
     assert "SELECT ?addr_iri (MAX(?_start_time) AS ?latest_start_time)" in query
     assert "lc:hasLifecycleStage ?latest_lifecycle_stage" in query
     assert (
-        "sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current> ;"
+        "sdo:additionalType <https://linked.data.gov.au/def/lifecycle-stage-types/current>"
         in query
     )
     assert "FILTER NOT EXISTS {" in query
     assert "?latest_lifecycle_stage time:hasEnd ?end_time" in query
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
+    assert_lifecycle_date_time_support(query)
     assert_no_valid_parcel_identifier_filters(query)
 
 
@@ -81,6 +93,7 @@ def test_get_query_filters_to_current_non_private_addresses():
     assert "GRAPH <urn:qali:graph:tags>" in query
     assert "<urn:qali:tag-collection:private> skos:member ?private_tag ." in query
     assert "?address_pid" not in query
+    assert_lifecycle_date_time_support(query)
     assert_no_valid_parcel_identifier_filters(query)
 
 
